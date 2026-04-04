@@ -36,11 +36,15 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4f {
   let normal = normalize(input.worldNormal);
   let cameraPosition = vec3f(0.0, 0.0, 3.2);
   let viewDirection = normalize(cameraPosition - input.worldPosition);
+  let viewDistance = distance(cameraPosition, input.worldPosition);
   let keyLightDirection = normalize(vec3f(-0.7, 0.8, 0.55));
   let fillLightDirection = normalize(vec3f(0.9, 0.35, 0.2));
   let ambientLight = vec3f(0.26, 0.22, 0.31);
   let keyLightColor = vec3f(1.0, 0.78, 0.62);
   let fillLightColor = vec3f(0.48, 0.58, 0.92);
+  let fogColor = vec3f(0.49, 0.35, 0.58);
+  let fogNear = 2.6;
+  let fogFar = 4.8;
 
   let keyDiffuse = max(dot(normal, keyLightDirection), 0.0);
   let fillDiffuse = max(dot(normal, fillLightDirection), 0.0);
@@ -53,6 +57,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4f {
     fillDiffuse * 0.45 * fillLightColor +
     specular * vec3f(1.0, 0.92, 0.86);
   let shadedColor = input.color * lighting;
+  let fogAmount = smoothstep(fogNear, fogFar, viewDistance);
+  let finalColor = mix(shadedColor, fogColor, fogAmount);
 
-  return vec4f(shadedColor, 1.0);
+  return vec4f(finalColor, 1.0);
 }
