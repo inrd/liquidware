@@ -4,16 +4,15 @@ import {
   INITIAL_ROTATION_Y,
   MATRIX_FLOAT_COUNT,
   applyRotation,
-  buildModelMatrix,
+  buildCameraPosition,
   buildModelViewProjectionMatrix,
-  buildViewProjectionMatrix,
   createIdentityMatrix,
 } from "./math";
 
 const CUBE_VERTEX_STRIDE = 9 * Float32Array.BYTES_PER_ELEMENT;
 const CUBE_INDEX_COUNT = 36;
 const FLOOR_INDEX_COUNT = 6;
-const SCENE_UNIFORM_FLOAT_COUNT = MATRIX_FLOAT_COUNT * 2;
+const SCENE_UNIFORM_FLOAT_COUNT = MATRIX_FLOAT_COUNT * 2 + 4;
 const SCENE_UNIFORM_BUFFER_SIZE = SCENE_UNIFORM_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
 const DEPTH_FORMAT = "depth24plus";
 
@@ -321,24 +320,21 @@ export class Renderer {
     }
 
     const aspectRatio = this.canvas.width / this.canvas.height;
-    const cubeModelViewProjection = buildModelViewProjectionMatrix(
+    const sceneModelViewProjection = buildModelViewProjectionMatrix(
       aspectRatio,
       this.rotationX,
       this.rotationY,
     );
-    const cubeModelMatrix = buildModelMatrix(this.rotationX, this.rotationY);
-    const floorModelViewProjection = buildViewProjectionMatrix(aspectRatio);
-    const floorModelMatrix = createIdentityMatrix();
-    const cubeSceneUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
-    const floorSceneUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
+    const sceneModelMatrix = createIdentityMatrix();
+    const cameraPosition = buildCameraPosition(this.rotationX, this.rotationY);
+    const sceneUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
 
-    cubeSceneUniforms.set(cubeModelViewProjection, 0);
-    cubeSceneUniforms.set(cubeModelMatrix, MATRIX_FLOAT_COUNT);
-    floorSceneUniforms.set(floorModelViewProjection, 0);
-    floorSceneUniforms.set(floorModelMatrix, MATRIX_FLOAT_COUNT);
+    sceneUniforms.set(sceneModelViewProjection, 0);
+    sceneUniforms.set(sceneModelMatrix, MATRIX_FLOAT_COUNT);
+    sceneUniforms.set(cameraPosition, MATRIX_FLOAT_COUNT * 2);
 
-    this.device.queue.writeBuffer(this.cubeUniformBuffer, 0, cubeSceneUniforms);
-    this.device.queue.writeBuffer(this.floorUniformBuffer, 0, floorSceneUniforms);
+    this.device.queue.writeBuffer(this.cubeUniformBuffer, 0, sceneUniforms);
+    this.device.queue.writeBuffer(this.floorUniformBuffer, 0, sceneUniforms);
   }
 
   private createDepthTexture(): void {

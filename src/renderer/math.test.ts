@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CAMERA_DISTANCE,
   INITIAL_ROTATION_X,
   INITIAL_ROTATION_Y,
   MAX_ROTATION_X,
   applyRotation,
+  buildCameraPosition,
   buildModelMatrix,
   buildModelViewProjectionMatrix,
   buildViewProjectionMatrix,
@@ -86,6 +88,20 @@ describe("matrix helpers", () => {
     expect(a.every(Number.isFinite)).toBe(true);
     expect(b.every(Number.isFinite)).toBe(true);
     expect(toArray(a)).not.toEqual(toArray(b));
+  });
+
+  it("builds a camera position that orbits around the scene", () => {
+    const center = buildCameraPosition(0, 0);
+    const rotated = buildCameraPosition(0, Math.PI / 2);
+
+    expect(center[0]).toBeCloseTo(0, 5);
+    expect(center[1]).toBeCloseTo(0, 5);
+    expect(center[2]).toBeCloseTo(CAMERA_DISTANCE, 5);
+    expect(center[3]).toBe(1);
+    expect(rotated[0]).toBeCloseTo(CAMERA_DISTANCE, 5);
+    expect(rotated[1]).toBeCloseTo(0, 5);
+    expect(rotated[2]).toBeCloseTo(0, 5);
+    expect(rotated[3]).toBe(1);
   });
 
   it("builds a finite view-projection matrix", () => {

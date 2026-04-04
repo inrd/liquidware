@@ -1,6 +1,7 @@
 struct SceneUniforms {
   modelViewProjection: mat4x4f,
   modelMatrix: mat4x4f,
+  cameraPosition: vec4f,
 };
 
 @group(0) @binding(0)
@@ -68,7 +69,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4f {
   let normal = normalize(input.worldNormal);
-  let cameraPosition = vec3f(0.0, 0.0, 3.2);
+  let cameraPosition = scene.cameraPosition.xyz;
   let viewDirection = normalize(cameraPosition - input.worldPosition);
   let viewDistance = distance(cameraPosition, input.worldPosition);
   let keyLightDirection = normalize(vec3f(-0.7, 0.8, 0.55));

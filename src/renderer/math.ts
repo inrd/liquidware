@@ -2,6 +2,7 @@ export const MATRIX_FLOAT_COUNT = 16;
 export const INITIAL_ROTATION_X = -0.45;
 export const INITIAL_ROTATION_Y = 0.7;
 export const MAX_ROTATION_X = Math.PI * 0.45;
+export const CAMERA_DISTANCE = 3.2;
 
 export type Mat4 = Float32Array;
 
@@ -90,11 +91,8 @@ export function buildModelViewProjectionMatrix(
   rotationY: number,
 ): Mat4 {
   const projection = buildProjectionMatrix(aspectRatio);
-  const view = buildViewMatrix();
-  const model = buildModelMatrix(rotationX, rotationY);
-  const viewModel = multiplyMatrices(view, model);
-
-  return multiplyMatrices(projection, viewModel);
+  const view = buildViewMatrix(rotationX, rotationY);
+  return multiplyMatrices(projection, view);
 }
 
 export function buildModelMatrix(rotationX: number, rotationY: number): Mat4 {
@@ -104,7 +102,12 @@ export function buildModelMatrix(rotationX: number, rotationY: number): Mat4 {
 }
 
 export function buildViewProjectionMatrix(aspectRatio: number): Mat4 {
-  return multiplyMatrices(buildProjectionMatrix(aspectRatio), buildViewMatrix());
+  return multiplyMatrices(buildProjectionMatrix(aspectRatio), buildViewMatrix(0, 0));
+}
+
+export function buildCameraPosition(rotationX: number, rotationY: number): Float32Array {
+  const sceneRotation = buildModelMatrix(rotationX, rotationY);
+  return transformPoint(sceneRotation, new Float32Array([0, 0, CAMERA_DISTANCE, 1]));
 }
 
 export function createIdentityMatrix(): Mat4 {
@@ -120,6 +123,24 @@ function buildProjectionMatrix(aspectRatio: number): Mat4 {
   return perspectiveMatrix((60 * Math.PI) / 180, aspectRatio, 0.1, 100);
 }
 
-function buildViewMatrix(): Mat4 {
-  return translationMatrix(0, 0, -3.2);
+function buildViewMatrix(rotationX: number, rotationY: number): Mat4 {
+  const cameraTranslation = translationMatrix(0, 0, -CAMERA_DISTANCE);
+  const inverseRotation = multiplyMatrices(rotationXMatrix(-rotationX), rotationYMatrix(-rotationY));
+  return multiplyMatrices(cameraTranslation, inverseRotation);
+}
+
+function transformPoint(matrix: Mat4, point: Float32Array): Float32Array {
+  const result = new Float32Array(4);
+
+  for (let row = 0; row < 4; row += 1) {
+    let sum = 0;
+
+    for (let column = 0; column < 4; column += 1) {
+      sum += matrix[column * 4 + row] * point[column];
+    }
+
+    result[row] = sum;
+  }
+
+  return result;
 }

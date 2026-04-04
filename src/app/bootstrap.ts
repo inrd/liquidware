@@ -98,6 +98,35 @@ export async function bootstrap(): Promise<void> {
       await updateRenderPreview();
       syncModeUi();
     });
+    const toolbarRotateStep = 0.18;
+    toolbar.rotateUpButton.addEventListener("click", () => {
+      if (mode !== "edit" || isRendering) {
+        return;
+      }
+
+      renderer.rotate(-toolbarRotateStep, 0);
+    });
+    toolbar.rotateDownButton.addEventListener("click", () => {
+      if (mode !== "edit" || isRendering) {
+        return;
+      }
+
+      renderer.rotate(toolbarRotateStep, 0);
+    });
+    toolbar.rotateLeftButton.addEventListener("click", () => {
+      if (mode !== "edit" || isRendering) {
+        return;
+      }
+
+      renderer.rotate(0, -toolbarRotateStep);
+    });
+    toolbar.rotateRightButton.addEventListener("click", () => {
+      if (mode !== "edit" || isRendering) {
+        return;
+      }
+
+      renderer.rotate(0, toolbarRotateStep);
+    });
 
     function syncModeUi(): void {
       const isEditMode = mode === "edit";
@@ -136,12 +165,21 @@ function createToolbar(): {
   element: HTMLDivElement;
   editButton: HTMLButtonElement;
   renderButton: HTMLButtonElement;
+  rotateUpButton: HTMLButtonElement;
+  rotateDownButton: HTMLButtonElement;
+  rotateLeftButton: HTMLButtonElement;
+  rotateRightButton: HTMLButtonElement;
   setMode: (mode: ViewMode, isRendering: boolean) => void;
 } {
   const toolbar = document.createElement("div");
   const handle = document.createElement("button");
   const editButton = document.createElement("button");
   const renderButton = document.createElement("button");
+  const rotateCluster = document.createElement("div");
+  const rotateUpButton = document.createElement("button");
+  const rotateLeftButton = document.createElement("button");
+  const rotateDownButton = document.createElement("button");
+  const rotateRightButton = document.createElement("button");
   const loadingBorder = document.createElement("div");
 
   let pointerId: number | null = null;
@@ -198,6 +236,29 @@ function createToolbar(): {
 
   configureButton(editButton, "edit", "active");
   configureButton(renderButton, "render", "idle");
+  configureRotateButton(rotateUpButton, "↑", "Tilt scene up");
+  configureRotateButton(rotateLeftButton, "←", "Spin scene left");
+  configureRotateButton(rotateDownButton, "↓", "Tilt scene down");
+  configureRotateButton(rotateRightButton, "→", "Spin scene right");
+
+  Object.assign(rotateCluster.style, {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 34px)",
+    gridTemplateRows: "repeat(2, 34px)",
+    gap: "6px",
+    alignItems: "center",
+  });
+
+  rotateUpButton.style.gridColumn = "2";
+  rotateUpButton.style.gridRow = "1";
+  rotateLeftButton.style.gridColumn = "1";
+  rotateLeftButton.style.gridRow = "2";
+  rotateDownButton.style.gridColumn = "2";
+  rotateDownButton.style.gridRow = "2";
+  rotateRightButton.style.gridColumn = "3";
+  rotateRightButton.style.gridRow = "2";
+
+  rotateCluster.append(rotateUpButton, rotateLeftButton, rotateDownButton, rotateRightButton);
 
   handle.addEventListener("pointerdown", (event) => {
     pointerId = event.pointerId;
@@ -239,13 +300,19 @@ function createToolbar(): {
   handle.addEventListener("pointerup", endDrag);
   handle.addEventListener("pointercancel", endDrag);
 
-  toolbar.append(loadingBorder, handle, editButton, renderButton);
+  toolbar.append(loadingBorder, handle, editButton, renderButton, rotateCluster);
 
   return {
     element: toolbar,
     editButton,
     renderButton,
+    rotateUpButton,
+    rotateDownButton,
+    rotateLeftButton,
+    rotateRightButton,
     setMode: (mode, isRendering) => {
+      const disableRotation = isRendering || mode !== "edit";
+
       setButtonState(editButton, mode === "edit" ? "active" : "idle");
       setButtonState(renderButton, mode === "render" ? "active" : "idle");
       loadingBorder.style.display = isRendering ? "block" : "none";
@@ -253,6 +320,12 @@ function createToolbar(): {
       renderButton.disabled = isRendering;
       editButton.style.cursor = isRendering ? "wait" : "pointer";
       renderButton.style.cursor = isRendering ? "wait" : "pointer";
+
+      for (const button of [rotateUpButton, rotateDownButton, rotateLeftButton, rotateRightButton]) {
+        button.disabled = disableRotation;
+        button.style.cursor = disableRotation ? (isRendering ? "wait" : "default") : "pointer";
+        button.style.opacity = disableRotation ? "0.42" : "0.92";
+      }
     },
   };
 }
@@ -286,6 +359,32 @@ function configureButton(
   });
 
   setButtonState(button, initialState);
+}
+
+function configureRotateButton(button: HTMLButtonElement, label: string, title: string): void {
+  button.type = "button";
+  button.textContent = label;
+  button.setAttribute("aria-label", title);
+  button.title = title;
+
+  Object.assign(button.style, {
+    appearance: "none",
+    width: "34px",
+    height: "34px",
+    padding: "0",
+    border: "1px solid rgba(180, 198, 238, 0.3)",
+    borderRadius: "10px",
+    background: "linear-gradient(180deg, rgba(218, 231, 255, 0.22), rgba(170, 193, 243, 0.1))",
+    color: "rgba(238, 244, 255, 0.95)",
+    fontFamily: "\"IBM Plex Sans\", \"Avenir Next\", sans-serif",
+    fontSize: "18px",
+    fontWeight: "700",
+    lineHeight: "1",
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.12)",
+    cursor: "pointer",
+    opacity: "0.92",
+    transition: "background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, opacity 140ms ease",
+  });
 }
 
 function setButtonState(button: HTMLButtonElement, state: ToolbarButtonState): void {

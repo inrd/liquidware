@@ -23,8 +23,7 @@ npm test
 
 ## Controls
 
-- Arrow keys rotate the cube.
-- Click and drag rotates the cube.
 - A floating toolbar overlaps the canvas; drag it by its handle to move it around.
+- Rotate the scene via mouse drag, keyboard arrow keys or toolbar arrows
 - `edit` shows the live WebGPU canvas and keeps rotation controls enabled.
 - `render` captures a rasterized still of the current scene when you enter that mode.
