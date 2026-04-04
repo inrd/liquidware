@@ -5,11 +5,14 @@ type ViewMode = "edit" | "render";
 
 export async function bootstrap(): Promise<void> {
   const canvas = document.createElement("canvas");
+  const renderStage = document.createElement("div");
   const renderImage = document.createElement("img");
   const status = document.createElement("p");
   const toolbar = createToolbar();
   let mode: ViewMode = "edit";
   let isRendering = false;
+  let renderBlob: Blob | null = null;
+  let renderUrl: string | null = null;
 
   Object.assign(document.body.style, {
     margin: "0",
@@ -27,18 +30,28 @@ export async function bootstrap(): Promise<void> {
     cursor: "grab",
   });
 
+  Object.assign(renderStage.style, {
+    position: "fixed",
+    inset: "0",
+    display: "none",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "40px",
+    backgroundColor: "#000000",
+  });
+
   renderImage.alt = "Rasterized scene preview";
   renderImage.draggable = false;
 
   Object.assign(renderImage.style, {
-    position: "fixed",
-    inset: "0",
-    width: "100vw",
-    height: "100vh",
-    display: "none",
-    objectFit: "cover",
+    display: "block",
+    maxWidth: "min(100%, 960px)",
+    maxHeight: "calc(100vh - 80px)",
+    width: "auto",
+    height: "auto",
+    objectFit: "contain",
     imageRendering: "auto",
-    pointerEvents: "none",
+    boxShadow: "0 18px 40px rgba(0, 0, 0, 0.5)",
   });
 
   Object.assign(status.style, {
@@ -53,7 +66,8 @@ export async function bootstrap(): Promise<void> {
     lineHeight: "1.5",
   });
 
-  document.body.append(canvas, renderImage, toolbar.element, status);
+  renderStage.append(renderImage);
+  document.body.append(canvas, renderStage, toolbar.element, status);
 
   if (!("gpu" in navigator)) {
     status.textContent = "WebGPU is not available in this browser.";
@@ -98,6 +112,40 @@ export async function bootstrap(): Promise<void> {
       await updateRenderPreview();
       syncModeUi();
     });
+    toolbar.downloadButton.addEventListener("click", () => {
+      if (mode !== "render" || isRendering || !renderBlob) {
+        return;
+      }
+
+      const downloadUrl = URL.createObjectURL(renderBlob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `liquidware-render-${Date.now()}.png`;
+      link.click();
+      URL.revokeObjectURL(downloadUrl);
+    });
+    toolbar.copyButton.addEventListener("click", async () => {
+      if (mode !== "render" || isRendering || !renderBlob) {
+        return;
+      }
+
+      if (!("clipboard" in navigator) || typeof ClipboardItem === "undefined") {
+        flashButtonLabel(toolbar.copyButton, "unavailable");
+        return;
+      }
+
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            [renderBlob.type]: renderBlob,
+          }),
+        ]);
+        flashButtonLabel(toolbar.copyButton, "copied");
+      } catch (error) {
+        console.error(error);
+        flashButtonLabel(toolbar.copyButton, "failed");
+      }
+    });
     const toolbarRotateStep = 0.18;
     toolbar.rotateUpButton.addEventListener("click", () => {
       if (mode !== "edit" || isRendering) {
@@ -131,7 +179,7 @@ export async function bootstrap(): Promise<void> {
     function syncModeUi(): void {
       const isEditMode = mode === "edit";
       canvas.style.display = isEditMode ? "block" : "none";
-      renderImage.style.display = isEditMode ? "none" : "block";
+      renderStage.style.display = isEditMode ? "none" : "flex";
       toolbar.setMode(mode, isRendering);
     }
 
@@ -141,7 +189,18 @@ export async function bootstrap(): Promise<void> {
       await nextFrame();
       renderer.render();
       await nextFrame();
-      renderImage.src = canvas.toDataURL("image/png");
+      const nextRenderBlob = await canvasToBlob(canvas);
+      if (!nextRenderBlob) {
+        throw new Error("Unable to rasterize render preview.");
+      }
+
+      if (renderUrl) {
+        URL.revokeObjectURL(renderUrl);
+      }
+
+      renderBlob = nextRenderBlob;
+      renderUrl = URL.createObjectURL(nextRenderBlob);
+      renderImage.src = renderUrl;
       isRendering = false;
       syncModeUi();
     }
@@ -165,6 +224,8 @@ function createToolbar(): {
   element: HTMLDivElement;
   editButton: HTMLButtonElement;
   renderButton: HTMLButtonElement;
+  downloadButton: HTMLButtonElement;
+  copyButton: HTMLButtonElement;
   rotateUpButton: HTMLButtonElement;
   rotateDownButton: HTMLButtonElement;
   rotateLeftButton: HTMLButtonElement;
@@ -175,6 +236,9 @@ function createToolbar(): {
   const handle = document.createElement("button");
   const editButton = document.createElement("button");
   const renderButton = document.createElement("button");
+  const actionCluster = document.createElement("div");
+  const downloadButton = document.createElement("button");
+  const copyButton = document.createElement("button");
   const rotateCluster = document.createElement("div");
   const rotateUpButton = document.createElement("button");
   const rotateLeftButton = document.createElement("button");
@@ -236,10 +300,18 @@ function createToolbar(): {
 
   configureButton(editButton, "edit", "active");
   configureButton(renderButton, "render", "idle");
+  configureButton(downloadButton, "download", "idle");
+  configureButton(copyButton, "copy", "idle");
   configureRotateButton(rotateUpButton, "↑", "Tilt scene up");
   configureRotateButton(rotateLeftButton, "←", "Spin scene left");
   configureRotateButton(rotateDownButton, "↓", "Tilt scene down");
   configureRotateButton(rotateRightButton, "→", "Spin scene right");
+
+  Object.assign(actionCluster.style, {
+    display: "none",
+    alignItems: "center",
+    gap: "10px",
+  });
 
   Object.assign(rotateCluster.style, {
     display: "grid",
@@ -258,6 +330,7 @@ function createToolbar(): {
   rotateRightButton.style.gridColumn = "3";
   rotateRightButton.style.gridRow = "2";
 
+  actionCluster.append(downloadButton, copyButton);
   rotateCluster.append(rotateUpButton, rotateLeftButton, rotateDownButton, rotateRightButton);
 
   handle.addEventListener("pointerdown", (event) => {
@@ -300,18 +373,21 @@ function createToolbar(): {
   handle.addEventListener("pointerup", endDrag);
   handle.addEventListener("pointercancel", endDrag);
 
-  toolbar.append(loadingBorder, handle, editButton, renderButton, rotateCluster);
+  toolbar.append(loadingBorder, handle, editButton, renderButton, actionCluster, rotateCluster);
 
   return {
     element: toolbar,
     editButton,
     renderButton,
+    downloadButton,
+    copyButton,
     rotateUpButton,
     rotateDownButton,
     rotateLeftButton,
     rotateRightButton,
     setMode: (mode, isRendering) => {
       const disableRotation = isRendering || mode !== "edit";
+      const disableRenderActions = isRendering || mode !== "render";
 
       setButtonState(editButton, mode === "edit" ? "active" : "idle");
       setButtonState(renderButton, mode === "render" ? "active" : "idle");
@@ -320,6 +396,14 @@ function createToolbar(): {
       renderButton.disabled = isRendering;
       editButton.style.cursor = isRendering ? "wait" : "pointer";
       renderButton.style.cursor = isRendering ? "wait" : "pointer";
+      actionCluster.style.display = mode === "render" ? "flex" : "none";
+      rotateCluster.style.display = mode === "edit" ? "grid" : "none";
+
+      for (const button of [downloadButton, copyButton]) {
+        button.disabled = disableRenderActions;
+        button.style.cursor = disableRenderActions ? (isRendering ? "wait" : "default") : "pointer";
+        button.style.opacity = disableRenderActions ? "0.42" : "0.92";
+      }
 
       for (const button of [rotateUpButton, rotateDownButton, rotateLeftButton, rotateRightButton]) {
         button.disabled = disableRotation;
@@ -411,8 +495,23 @@ function nextFrame(): Promise<void> {
   });
 }
 
+function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+function flashButtonLabel(button: HTMLButtonElement, label: string): void {
+  const originalLabel = button.dataset.originalLabel ?? button.textContent ?? "";
+  button.dataset.originalLabel = originalLabel;
+  button.textContent = label;
+  window.setTimeout(() => {
+    button.textContent = originalLabel;
+  }, 1200);
 }
 
 const toolbarAnimationStyles = document.createElement("style");

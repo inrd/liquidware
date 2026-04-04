@@ -26,4 +26,4 @@ npm test
 - A floating toolbar overlaps the canvas; drag it by its handle to move it around.
 - Rotate the scene via mouse drag, keyboard arrow keys or toolbar arrows
 - `edit` shows the live WebGPU canvas and keeps rotation controls enabled.
-- `render` captures a rasterized still of the current scene when you enter that mode.
+- `render` captures a rasterized still of the current scene with `download` and `copy` options.
