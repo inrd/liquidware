@@ -2,8 +2,16 @@ type Rotatable = {
   rotate(deltaX: number, deltaY: number): void;
 };
 
-export function attachControls(canvas: HTMLCanvasElement, target: Rotatable): void {
+export function attachControls(
+  canvas: HTMLCanvasElement,
+  target: Rotatable,
+  canInteract: () => boolean = () => true,
+): void {
   function handleKeydown(event: KeyboardEvent): void {
+    if (!canInteract()) {
+      return;
+    }
+
     const step = 0.12;
 
     switch (event.key) {
@@ -33,6 +41,10 @@ export function attachControls(canvas: HTMLCanvasElement, target: Rotatable): vo
   let lastPointerY = 0;
 
   function handlePointerDown(event: PointerEvent): void {
+    if (!canInteract()) {
+      return;
+    }
+
     isDragging = true;
     lastPointerX = event.clientX;
     lastPointerY = event.clientY;
@@ -41,7 +53,7 @@ export function attachControls(canvas: HTMLCanvasElement, target: Rotatable): vo
   }
 
   function handlePointerMove(event: PointerEvent): void {
-    if (!isDragging) {
+    if (!isDragging || !canInteract()) {
       return;
     }
 
