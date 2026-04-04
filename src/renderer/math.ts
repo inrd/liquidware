@@ -5,6 +5,11 @@ export const MAX_ROTATION_X = Math.PI * 0.45;
 export const CAMERA_DISTANCE = 3.2;
 
 export type Mat4 = Float32Array;
+export type ObjectTransform = {
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+};
 
 export function perspectiveMatrix(fieldOfView: number, aspectRatio: number, near: number, far: number): Mat4 {
   const f = 1 / Math.tan(fieldOfView / 2);
@@ -116,6 +121,17 @@ export function createIdentityMatrix(): Mat4 {
     0, 1, 0, 0,
     0, 0, 1, 0,
     0, 0, 0, 1,
+  ]);
+}
+
+export function buildObjectModelMatrix(transform: ObjectTransform): Mat4 {
+  const scale = Math.max(0.05, transform.scale);
+
+  return new Float32Array([
+    scale, 0, 0, 0,
+    0, scale, 0, 0,
+    0, 0, scale, 0,
+    transform.offsetX, transform.offsetY, 0, 1,
   ]);
 }
 

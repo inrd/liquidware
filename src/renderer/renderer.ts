@@ -11,8 +11,10 @@ import {
   MATRIX_FLOAT_COUNT,
   applyRotation,
   buildCameraPosition,
+  buildObjectModelMatrix,
   buildModelViewProjectionMatrix,
   createIdentityMatrix,
+  ObjectTransform,
 } from "./math";
 
 const SCENE_UNIFORM_FLOAT_COUNT = MATRIX_FLOAT_COUNT * 2 + 12;
@@ -31,6 +33,11 @@ const DEFAULT_MATERIAL: MaterialSettings = {
   surface: 0.38,
   gloss: 0.62,
   bleed: 0.22,
+};
+const DEFAULT_OBJECT_TRANSFORM: ObjectTransform = {
+  offsetX: 0,
+  offsetY: 0,
+  scale: 1,
 };
 
 export class Renderer {
@@ -59,6 +66,7 @@ export class Renderer {
   private rotationX = INITIAL_ROTATION_X;
   private rotationY = INITIAL_ROTATION_Y;
   private material: MaterialSettings = DEFAULT_MATERIAL;
+  private objectTransform: ObjectTransform = DEFAULT_OBJECT_TRANSFORM;
 
   public constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -124,6 +132,13 @@ export class Renderer {
 
   public resetObjectMesh(): void {
     this.setObjectMesh(createDefaultCubeMesh());
+  }
+
+  public setObjectTransform(nextTransform: Partial<ObjectTransform>): void {
+    this.objectTransform = {
+      ...this.objectTransform,
+      ...nextTransform,
+    };
   }
 
   public render(): void {
@@ -403,7 +418,7 @@ export class Renderer {
       this.rotationX,
       this.rotationY,
     );
-    const sceneModelMatrix = createIdentityMatrix();
+    const sceneModelMatrix = buildObjectModelMatrix(this.objectTransform);
     const cameraPosition = buildCameraPosition(this.rotationX, this.rotationY);
     const objectUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
     const floorUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
@@ -421,7 +436,7 @@ export class Renderer {
     );
 
     floorUniforms.set(sceneViewProjection, 0);
-    floorUniforms.set(sceneModelMatrix, MATRIX_FLOAT_COUNT);
+    floorUniforms.set(createIdentityMatrix(), MATRIX_FLOAT_COUNT);
     floorUniforms.set(cameraPosition, MATRIX_FLOAT_COUNT * 2);
     floorUniforms.set([0, 0, 0, 0], MATRIX_FLOAT_COUNT * 2 + 4);
     floorUniforms.set([1, 0.08, 1, 0], MATRIX_FLOAT_COUNT * 2 + 8);

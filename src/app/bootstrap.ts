@@ -14,6 +14,15 @@ type MaterialControlElements = {
   bleedValue: HTMLSpanElement;
   panel: HTMLDivElement;
 };
+type TransformControlElements = {
+  scaleInput: HTMLInputElement;
+  scaleValue: HTMLSpanElement;
+  offsetXInput: HTMLInputElement;
+  offsetXValue: HTMLSpanElement;
+  offsetYInput: HTMLInputElement;
+  offsetYValue: HTMLSpanElement;
+  panel: HTMLDivElement;
+};
 type MeshControlElements = {
   uploadButton: HTMLButtonElement;
   resetButton: HTMLButtonElement;
@@ -220,6 +229,21 @@ export async function bootstrap(): Promise<void> {
       toolbar.material.bleedValue.textContent = bleed.toFixed(2);
       renderer.setMaterial({ bleed });
     });
+    toolbar.transform.scaleInput.addEventListener("input", () => {
+      const scale = Number(toolbar.transform.scaleInput.value);
+      toolbar.transform.scaleValue.textContent = scale.toFixed(2);
+      renderer.setObjectTransform({ scale });
+    });
+    toolbar.transform.offsetXInput.addEventListener("input", () => {
+      const offsetX = Number(toolbar.transform.offsetXInput.value);
+      toolbar.transform.offsetXValue.textContent = offsetX.toFixed(2);
+      renderer.setObjectTransform({ offsetX });
+    });
+    toolbar.transform.offsetYInput.addEventListener("input", () => {
+      const offsetY = Number(toolbar.transform.offsetYInput.value);
+      toolbar.transform.offsetYValue.textContent = offsetY.toFixed(2);
+      renderer.setObjectTransform({ offsetY });
+    });
     toolbar.mesh.uploadButton.addEventListener("click", () => {
       if (isRendering) {
         return;
@@ -318,6 +342,7 @@ function createToolbar(): {
   rotateDownButton: HTMLButtonElement;
   rotateLeftButton: HTMLButtonElement;
   rotateRightButton: HTMLButtonElement;
+  transform: TransformControlElements;
   material: MaterialControlElements;
   mesh: MeshControlElements;
   setMode: (mode: ViewMode, isRendering: boolean) => void;
@@ -334,6 +359,16 @@ function createToolbar(): {
   const rotateLeftButton = document.createElement("button");
   const rotateDownButton = document.createElement("button");
   const rotateRightButton = document.createElement("button");
+  const transformPanel = document.createElement("div");
+  const scaleLabel = document.createElement("label");
+  const scaleInput = document.createElement("input");
+  const scaleValue = document.createElement("span");
+  const offsetXLabel = document.createElement("label");
+  const offsetXInput = document.createElement("input");
+  const offsetXValue = document.createElement("span");
+  const offsetYLabel = document.createElement("label");
+  const offsetYInput = document.createElement("input");
+  const offsetYValue = document.createElement("span");
   const meshPanel = document.createElement("div");
   const meshLabel = document.createElement("label");
   const meshControls = document.createElement("div");
@@ -441,6 +476,18 @@ function createToolbar(): {
     minWidth: "198px",
   });
 
+  Object.assign(transformPanel.style, {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, auto))",
+    gap: "8px 12px",
+    padding: "10px 12px",
+    border: "1px solid rgba(187, 204, 240, 0.18)",
+    borderRadius: "14px",
+    background: "linear-gradient(180deg, rgba(14, 19, 39, 0.42), rgba(10, 14, 28, 0.26))",
+    alignItems: "center",
+    minWidth: "212px",
+  });
+
   rotateUpButton.style.gridColumn = "2";
   rotateUpButton.style.gridRow = "1";
   rotateLeftButton.style.gridColumn = "1";
@@ -462,6 +509,9 @@ function createToolbar(): {
     minWidth: "212px",
   });
 
+  configureMaterialLabel(scaleLabel, "scale");
+  configureMaterialLabel(offsetXLabel, "move x");
+  configureMaterialLabel(offsetYLabel, "move y");
   configureMaterialLabel(meshLabel, "mesh");
   configureMaterialLabel(colorLabel, "color");
   configureMaterialLabel(surfaceLabel, "surface");
@@ -497,6 +547,26 @@ function createToolbar(): {
     textOverflow: "ellipsis",
   });
 
+  configureMaterialRange(scaleInput, "Object scale");
+  scaleInput.min = "0.25";
+  scaleInput.max = "2.5";
+  scaleInput.step = "0.01";
+  scaleInput.value = "1.00";
+  configureMaterialRange(offsetXInput, "Object x offset");
+  offsetXInput.min = "-1.5";
+  offsetXInput.max = "1.5";
+  offsetXInput.step = "0.01";
+  offsetXInput.value = "0.00";
+  configureMaterialRange(offsetYInput, "Object y offset");
+  offsetYInput.min = "-1.5";
+  offsetYInput.max = "1.5";
+  offsetYInput.step = "0.01";
+  offsetYInput.value = "0.00";
+
+  configureMaterialValue(scaleValue, scaleInput.value);
+  configureMaterialValue(offsetXValue, offsetXInput.value);
+  configureMaterialValue(offsetYValue, offsetYInput.value);
+
   colorInput.type = "color";
   colorInput.value = "#38c2dc";
   colorInput.setAttribute("aria-label", "Object material color");
@@ -523,6 +593,14 @@ function createToolbar(): {
 
   actionCluster.append(downloadButton, copyButton);
   rotateCluster.append(rotateUpButton, rotateLeftButton, rotateDownButton, rotateRightButton);
+  transformPanel.append(
+    scaleLabel,
+    wrapMaterialRange(scaleInput, scaleValue),
+    offsetXLabel,
+    wrapMaterialRange(offsetXInput, offsetXValue),
+    offsetYLabel,
+    wrapMaterialRange(offsetYInput, offsetYValue),
+  );
   meshControls.append(uploadMeshButton, resetMeshButton);
   meshPanel.append(meshLabel, meshControls, meshName, meshFileInput);
   materialPanel.append(
@@ -583,6 +661,7 @@ function createToolbar(): {
     renderButton,
     actionCluster,
     rotateCluster,
+    transformPanel,
     meshPanel,
     materialPanel,
   );
@@ -597,6 +676,15 @@ function createToolbar(): {
     rotateDownButton,
     rotateLeftButton,
     rotateRightButton,
+    transform: {
+      scaleInput,
+      scaleValue,
+      offsetXInput,
+      offsetXValue,
+      offsetYInput,
+      offsetYValue,
+      panel: transformPanel,
+    },
     mesh: {
       uploadButton: uploadMeshButton,
       resetButton: resetMeshButton,
@@ -617,6 +705,7 @@ function createToolbar(): {
     setMode: (mode, isRendering) => {
       const disableRotation = isRendering || mode !== "edit";
       const disableRenderActions = isRendering || mode !== "render";
+      const disableTransform = isRendering;
       const disableMaterial = isRendering;
       const disableMesh = isRendering;
       const showEditControls = mode === "edit";
@@ -630,6 +719,7 @@ function createToolbar(): {
       renderButton.style.cursor = isRendering ? "wait" : "pointer";
       actionCluster.style.display = mode === "render" ? "flex" : "none";
       rotateCluster.style.display = showEditControls ? "grid" : "none";
+      transformPanel.style.display = showEditControls ? "grid" : "none";
       meshPanel.style.display = showEditControls ? "grid" : "none";
       materialPanel.style.display = showEditControls ? "grid" : "none";
 
@@ -651,12 +741,19 @@ function createToolbar(): {
         button.style.opacity = disableMesh ? "0.42" : "0.92";
       }
 
+      for (const input of [scaleInput, offsetXInput, offsetYInput]) {
+        input.disabled = disableTransform;
+        input.style.cursor = disableTransform ? (isRendering ? "wait" : "default") : "pointer";
+        input.style.opacity = disableTransform ? "0.42" : "0.96";
+      }
+
       for (const input of [colorInput, surfaceInput, glossInput, bleedInput]) {
         input.disabled = disableMaterial;
         input.style.cursor = disableMaterial ? (isRendering ? "wait" : "default") : "pointer";
         input.style.opacity = disableMaterial ? "0.42" : "0.96";
       }
 
+      transformPanel.style.opacity = disableTransform ? "0.56" : "1";
       materialPanel.style.opacity = disableMaterial ? "0.56" : "1";
       meshPanel.style.opacity = disableMesh ? "0.56" : "1";
     },

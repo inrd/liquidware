@@ -7,6 +7,7 @@ import {
   MAX_ROTATION_X,
   applyRotation,
   buildCameraPosition,
+  buildObjectModelMatrix,
   buildModelMatrix,
   buildModelViewProjectionMatrix,
   buildViewProjectionMatrix,
@@ -112,5 +113,20 @@ describe("matrix helpers", () => {
     expect(square.every(Number.isFinite)).toBe(true);
     expect(wide[0]).not.toBe(square[0]);
     expect(wide[5]).toBe(square[5]);
+  });
+
+  it("builds an object model matrix with uniform scale and x-y translation", () => {
+    const matrix = buildObjectModelMatrix({
+      offsetX: 0.4,
+      offsetY: -0.25,
+      scale: 1.6,
+    });
+
+    expect(matrix[0]).toBeCloseTo(1.6, 5);
+    expect(matrix[5]).toBeCloseTo(1.6, 5);
+    expect(matrix[10]).toBeCloseTo(1.6, 5);
+    expect(matrix[12]).toBeCloseTo(0.4, 5);
+    expect(matrix[13]).toBeCloseTo(-0.25, 5);
+    expect(matrix[15]).toBe(1);
   });
 });

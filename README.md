@@ -27,6 +27,7 @@ npm test
 
 - A floating toolbar overlaps the canvas; drag it by its handle to move it around.
 - Rotate the scene via mouse drag, keyboard arrow keys or toolbar arrows.
+- Use the transform controls in `edit` to scale the active mesh and move it along the scene's X/Y plane.
 - Use `load .obj` to replace the default cube with a local OBJ mesh, or `cube` to switch back.
 - Imported OBJ files are auto-centered, auto-scaled, and currently support polygon faces with `v`, optional `vn`, and `f` records.
 - Use the toolbar material controls to set the active mesh's single base color plus surface character, stylized gloss, and retro light bleed.
