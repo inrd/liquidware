@@ -25,7 +25,7 @@ npm test
 
 ## Controls
 
-- A floating toolbar overlaps the canvas; drag it by its handle to move it around.
+- A floating toolbar overlaps the canvas; drag it by its handle to move it around and use the small chevron button to collapse or expand it.
 - Rotate the scene via mouse drag, keyboard arrow keys or toolbar arrows.
 - Use the transform controls in `edit` to scale the active mesh and move it along the scene's X/Y/Z axes.
 - Use `load .obj` to replace the default cube with a local OBJ mesh, or `cube` to switch back.

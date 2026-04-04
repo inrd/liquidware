@@ -356,6 +356,7 @@ function createToolbar(): {
 } {
   const toolbar = document.createElement("div");
   const handle = document.createElement("button");
+  const collapseButton = document.createElement("button");
   const editButton = document.createElement("button");
   const renderButton = document.createElement("button");
   const actionCluster = document.createElement("div");
@@ -403,6 +404,7 @@ function createToolbar(): {
   let pointerId: number | null = null;
   let dragOffsetX = 0;
   let dragOffsetY = 0;
+  let isCollapsed = false;
 
   toolbar.setAttribute("aria-label", "Floating toolbar");
 
@@ -451,6 +453,15 @@ function createToolbar(): {
   handle.style.padding = "0";
   handle.style.fontSize = "19px";
   handle.style.letterSpacing = "1px";
+
+  configureButton(collapseButton, "⌃", "idle");
+  collapseButton.setAttribute("aria-label", "Collapse toolbar");
+  collapseButton.title = "Collapse toolbar";
+  collapseButton.style.width = "30px";
+  collapseButton.style.minWidth = "30px";
+  collapseButton.style.padding = "0";
+  collapseButton.style.fontSize = "16px";
+  collapseButton.style.lineHeight = "1";
 
   configureButton(editButton, "edit", "active");
   configureButton(renderButton, "render", "idle");
@@ -673,9 +684,15 @@ function createToolbar(): {
   handle.addEventListener("pointerup", endDrag);
   handle.addEventListener("pointercancel", endDrag);
 
+  collapseButton.addEventListener("click", () => {
+    isCollapsed = !isCollapsed;
+    updateToolbarVisibility(currentMode, currentIsRendering);
+  });
+
   toolbar.append(
     loadingBorder,
     handle,
+    collapseButton,
     editButton,
     renderButton,
     actionCluster,
@@ -684,6 +701,73 @@ function createToolbar(): {
     meshPanel,
     materialPanel,
   );
+
+  let currentMode: ViewMode = "edit";
+  let currentIsRendering = false;
+
+  function updateToolbarVisibility(mode: ViewMode, isRendering: boolean): void {
+    currentMode = mode;
+    currentIsRendering = isRendering;
+
+    const disableRotation = isRendering || mode !== "edit";
+    const disableRenderActions = isRendering || mode !== "render";
+    const disableTransform = isRendering;
+    const disableMaterial = isRendering;
+    const disableMesh = isRendering;
+    const showEditControls = mode === "edit" && !isCollapsed;
+    const showRenderActions = mode === "render" && !isCollapsed;
+
+    collapseButton.textContent = isCollapsed ? "⌄" : "⌃";
+    collapseButton.setAttribute("aria-label", isCollapsed ? "Expand toolbar" : "Collapse toolbar");
+    collapseButton.title = isCollapsed ? "Expand toolbar" : "Collapse toolbar";
+
+    setButtonState(editButton, mode === "edit" ? "active" : "idle");
+    setButtonState(renderButton, mode === "render" ? "active" : "idle");
+    loadingBorder.style.display = isRendering ? "block" : "none";
+    editButton.disabled = isRendering;
+    renderButton.disabled = isRendering;
+    editButton.style.cursor = isRendering ? "wait" : "pointer";
+    renderButton.style.cursor = isRendering ? "wait" : "pointer";
+    actionCluster.style.display = showRenderActions ? "flex" : "none";
+    rotateCluster.style.display = showEditControls ? "grid" : "none";
+    transformPanel.style.display = showEditControls ? "grid" : "none";
+    meshPanel.style.display = showEditControls ? "grid" : "none";
+    materialPanel.style.display = showEditControls ? "grid" : "none";
+
+    for (const button of [downloadButton, copyButton]) {
+      button.disabled = disableRenderActions;
+      button.style.cursor = disableRenderActions ? (isRendering ? "wait" : "default") : "pointer";
+      button.style.opacity = disableRenderActions ? "0.42" : "0.92";
+    }
+
+    for (const button of [rotateUpButton, rotateDownButton, rotateLeftButton, rotateRightButton]) {
+      button.disabled = disableRotation;
+      button.style.cursor = disableRotation ? (isRendering ? "wait" : "default") : "pointer";
+      button.style.opacity = disableRotation ? "0.42" : "0.92";
+    }
+
+    for (const button of [uploadMeshButton, resetMeshButton]) {
+      button.disabled = disableMesh;
+      button.style.cursor = disableMesh ? (isRendering ? "wait" : "default") : "pointer";
+      button.style.opacity = disableMesh ? "0.42" : "0.92";
+    }
+
+    for (const input of [scaleInput, offsetXInput, offsetYInput, offsetZInput]) {
+      input.disabled = disableTransform;
+      input.style.cursor = disableTransform ? (isRendering ? "wait" : "default") : "pointer";
+      input.style.opacity = disableTransform ? "0.42" : "0.96";
+    }
+
+    for (const input of [colorInput, surfaceInput, glossInput, bleedInput]) {
+      input.disabled = disableMaterial;
+      input.style.cursor = disableMaterial ? (isRendering ? "wait" : "default") : "pointer";
+      input.style.opacity = disableMaterial ? "0.42" : "0.96";
+    }
+
+    transformPanel.style.opacity = disableTransform ? "0.56" : "1";
+    materialPanel.style.opacity = disableMaterial ? "0.56" : "1";
+    meshPanel.style.opacity = disableMesh ? "0.56" : "1";
+  }
 
   return {
     element: toolbar,
@@ -723,61 +807,7 @@ function createToolbar(): {
       bleedValue,
       panel: materialPanel,
     },
-    setMode: (mode, isRendering) => {
-      const disableRotation = isRendering || mode !== "edit";
-      const disableRenderActions = isRendering || mode !== "render";
-      const disableTransform = isRendering;
-      const disableMaterial = isRendering;
-      const disableMesh = isRendering;
-      const showEditControls = mode === "edit";
-
-      setButtonState(editButton, mode === "edit" ? "active" : "idle");
-      setButtonState(renderButton, mode === "render" ? "active" : "idle");
-      loadingBorder.style.display = isRendering ? "block" : "none";
-      editButton.disabled = isRendering;
-      renderButton.disabled = isRendering;
-      editButton.style.cursor = isRendering ? "wait" : "pointer";
-      renderButton.style.cursor = isRendering ? "wait" : "pointer";
-      actionCluster.style.display = mode === "render" ? "flex" : "none";
-      rotateCluster.style.display = showEditControls ? "grid" : "none";
-      transformPanel.style.display = showEditControls ? "grid" : "none";
-      meshPanel.style.display = showEditControls ? "grid" : "none";
-      materialPanel.style.display = showEditControls ? "grid" : "none";
-
-      for (const button of [downloadButton, copyButton]) {
-        button.disabled = disableRenderActions;
-        button.style.cursor = disableRenderActions ? (isRendering ? "wait" : "default") : "pointer";
-        button.style.opacity = disableRenderActions ? "0.42" : "0.92";
-      }
-
-      for (const button of [rotateUpButton, rotateDownButton, rotateLeftButton, rotateRightButton]) {
-        button.disabled = disableRotation;
-        button.style.cursor = disableRotation ? (isRendering ? "wait" : "default") : "pointer";
-        button.style.opacity = disableRotation ? "0.42" : "0.92";
-      }
-
-      for (const button of [uploadMeshButton, resetMeshButton]) {
-        button.disabled = disableMesh;
-        button.style.cursor = disableMesh ? (isRendering ? "wait" : "default") : "pointer";
-        button.style.opacity = disableMesh ? "0.42" : "0.92";
-      }
-
-      for (const input of [scaleInput, offsetXInput, offsetYInput, offsetZInput]) {
-        input.disabled = disableTransform;
-        input.style.cursor = disableTransform ? (isRendering ? "wait" : "default") : "pointer";
-        input.style.opacity = disableTransform ? "0.42" : "0.96";
-      }
-
-      for (const input of [colorInput, surfaceInput, glossInput, bleedInput]) {
-        input.disabled = disableMaterial;
-        input.style.cursor = disableMaterial ? (isRendering ? "wait" : "default") : "pointer";
-        input.style.opacity = disableMaterial ? "0.42" : "0.96";
-      }
-
-      transformPanel.style.opacity = disableTransform ? "0.56" : "1";
-      materialPanel.style.opacity = disableMaterial ? "0.56" : "1";
-      meshPanel.style.opacity = disableMesh ? "0.56" : "1";
-    },
+    setMode: updateToolbarVisibility,
   };
 }
 
