@@ -5,10 +5,14 @@ import {
   INITIAL_ROTATION_Y,
   MAX_ROTATION_X,
   applyRotation,
+  buildModelMatrix,
   buildModelViewProjectionMatrix,
+  buildViewProjectionMatrix,
+  createIdentityMatrix,
   multiplyMatrices,
   perspectiveMatrix,
   rotationXMatrix,
+  rotationYMatrix,
   translationMatrix,
 } from "./math";
 
@@ -43,11 +47,27 @@ describe("matrix helpers", () => {
   });
 
   it("preserves a matrix when multiplied by identity", () => {
-    const identity = rotationXMatrix(0);
+    const identity = createIdentityMatrix();
     const translation = translationMatrix(1, 2, 3);
 
     expect(toArray(multiplyMatrices(identity, translation))).toEqual(toArray(translation));
     expect(toArray(multiplyMatrices(translation, identity))).toEqual(toArray(translation));
+  });
+
+  it("creates an identity matrix", () => {
+    expect(toArray(createIdentityMatrix())).toEqual([
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1,
+    ]);
+  });
+
+  it("builds a model matrix from y and x rotations", () => {
+    const matrix = buildModelMatrix(0.25, -0.4);
+    const expected = multiplyMatrices(rotationYMatrix(-0.4), rotationXMatrix(0.25));
+
+    expect(toArray(matrix)).toEqual(toArray(expected));
   });
 
   it("builds a finite perspective projection matrix", () => {
@@ -66,5 +86,15 @@ describe("matrix helpers", () => {
     expect(a.every(Number.isFinite)).toBe(true);
     expect(b.every(Number.isFinite)).toBe(true);
     expect(toArray(a)).not.toEqual(toArray(b));
+  });
+
+  it("builds a finite view-projection matrix", () => {
+    const wide = buildViewProjectionMatrix(16 / 9);
+    const square = buildViewProjectionMatrix(1);
+
+    expect(wide.every(Number.isFinite)).toBe(true);
+    expect(square.every(Number.isFinite)).toBe(true);
+    expect(wide[0]).not.toBe(square[0]);
+    expect(wide[5]).toBe(square[5]);
   });
 });
