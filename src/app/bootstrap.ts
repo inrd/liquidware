@@ -1,4 +1,5 @@
 import { attachControls } from "../input/controls";
+import { applyRetroGrade } from "../renderer/postprocess";
 import { Renderer } from "../renderer/renderer";
 
 type ViewMode = "edit" | "render";
@@ -189,7 +190,7 @@ export async function bootstrap(): Promise<void> {
       await nextFrame();
       renderer.render();
       await nextFrame();
-      const nextRenderBlob = await canvasToBlob(canvas);
+      const nextRenderBlob = await renderRetroPreviewBlob(canvas);
       if (!nextRenderBlob) {
         throw new Error("Unable to rasterize render preview.");
       }
@@ -499,6 +500,29 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/png");
   });
+}
+
+async function renderRetroPreviewBlob(sourceCanvas: HTMLCanvasElement): Promise<Blob | null> {
+  const processingCanvas = document.createElement("canvas");
+  processingCanvas.width = sourceCanvas.width;
+  processingCanvas.height = sourceCanvas.height;
+
+  const context = processingCanvas.getContext("2d", {
+    willReadFrequently: true,
+  });
+
+  if (!context) {
+    return canvasToBlob(sourceCanvas);
+  }
+
+  context.drawImage(sourceCanvas, 0, 0);
+
+  const imageData = context.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
+  const gradedPixels = applyRetroGrade(imageData.data, imageData.width, imageData.height);
+  imageData.data.set(gradedPixels);
+  context.putImageData(imageData, 0, 0);
+
+  return canvasToBlob(processingCanvas);
 }
 
 function clamp(value: number, min: number, max: number): number {
