@@ -115,10 +115,11 @@ describe("matrix helpers", () => {
     expect(wide[5]).toBe(square[5]);
   });
 
-  it("builds an object model matrix with uniform scale and x-y translation", () => {
+  it("builds an object model matrix with uniform scale and x-y-z translation", () => {
     const matrix = buildObjectModelMatrix({
       offsetX: 0.4,
       offsetY: -0.25,
+      offsetZ: 0.6,
       scale: 1.6,
     });
 
@@ -127,6 +128,7 @@ describe("matrix helpers", () => {
     expect(matrix[10]).toBeCloseTo(1.6, 5);
     expect(matrix[12]).toBeCloseTo(0.4, 5);
     expect(matrix[13]).toBeCloseTo(-0.25, 5);
+    expect(matrix[14]).toBeCloseTo(0.6, 5);
     expect(matrix[15]).toBe(1);
   });
 });

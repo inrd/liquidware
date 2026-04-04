@@ -37,6 +37,7 @@ const DEFAULT_MATERIAL: MaterialSettings = {
 const DEFAULT_OBJECT_TRANSFORM: ObjectTransform = {
   offsetX: 0,
   offsetY: 0,
+  offsetZ: 0,
   scale: 1,
 };
 

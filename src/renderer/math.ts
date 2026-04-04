@@ -8,6 +8,7 @@ export type Mat4 = Float32Array;
 export type ObjectTransform = {
   offsetX: number;
   offsetY: number;
+  offsetZ: number;
   scale: number;
 };
 
@@ -131,7 +132,7 @@ export function buildObjectModelMatrix(transform: ObjectTransform): Mat4 {
     scale, 0, 0, 0,
     0, scale, 0, 0,
     0, 0, scale, 0,
-    transform.offsetX, transform.offsetY, 0, 1,
+    transform.offsetX, transform.offsetY, transform.offsetZ, 1,
   ]);
 }
 

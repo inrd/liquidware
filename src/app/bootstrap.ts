@@ -21,6 +21,8 @@ type TransformControlElements = {
   offsetXValue: HTMLSpanElement;
   offsetYInput: HTMLInputElement;
   offsetYValue: HTMLSpanElement;
+  offsetZInput: HTMLInputElement;
+  offsetZValue: HTMLSpanElement;
   panel: HTMLDivElement;
 };
 type MeshControlElements = {
@@ -244,6 +246,11 @@ export async function bootstrap(): Promise<void> {
       toolbar.transform.offsetYValue.textContent = offsetY.toFixed(2);
       renderer.setObjectTransform({ offsetY });
     });
+    toolbar.transform.offsetZInput.addEventListener("input", () => {
+      const offsetZ = Number(toolbar.transform.offsetZInput.value);
+      toolbar.transform.offsetZValue.textContent = offsetZ.toFixed(2);
+      renderer.setObjectTransform({ offsetZ });
+    });
     toolbar.mesh.uploadButton.addEventListener("click", () => {
       if (isRendering) {
         return;
@@ -369,6 +376,9 @@ function createToolbar(): {
   const offsetYLabel = document.createElement("label");
   const offsetYInput = document.createElement("input");
   const offsetYValue = document.createElement("span");
+  const offsetZLabel = document.createElement("label");
+  const offsetZInput = document.createElement("input");
+  const offsetZValue = document.createElement("span");
   const meshPanel = document.createElement("div");
   const meshLabel = document.createElement("label");
   const meshControls = document.createElement("div");
@@ -512,6 +522,7 @@ function createToolbar(): {
   configureMaterialLabel(scaleLabel, "scale");
   configureMaterialLabel(offsetXLabel, "move x");
   configureMaterialLabel(offsetYLabel, "move y");
+  configureMaterialLabel(offsetZLabel, "move z");
   configureMaterialLabel(meshLabel, "mesh");
   configureMaterialLabel(colorLabel, "color");
   configureMaterialLabel(surfaceLabel, "surface");
@@ -562,10 +573,16 @@ function createToolbar(): {
   offsetYInput.max = "1.5";
   offsetYInput.step = "0.01";
   offsetYInput.value = "0.00";
+  configureMaterialRange(offsetZInput, "Object z offset");
+  offsetZInput.min = "-1.5";
+  offsetZInput.max = "1.5";
+  offsetZInput.step = "0.01";
+  offsetZInput.value = "0.00";
 
   configureMaterialValue(scaleValue, scaleInput.value);
   configureMaterialValue(offsetXValue, offsetXInput.value);
   configureMaterialValue(offsetYValue, offsetYInput.value);
+  configureMaterialValue(offsetZValue, offsetZInput.value);
 
   colorInput.type = "color";
   colorInput.value = "#38c2dc";
@@ -600,6 +617,8 @@ function createToolbar(): {
     wrapMaterialRange(offsetXInput, offsetXValue),
     offsetYLabel,
     wrapMaterialRange(offsetYInput, offsetYValue),
+    offsetZLabel,
+    wrapMaterialRange(offsetZInput, offsetZValue),
   );
   meshControls.append(uploadMeshButton, resetMeshButton);
   meshPanel.append(meshLabel, meshControls, meshName, meshFileInput);
@@ -683,6 +702,8 @@ function createToolbar(): {
       offsetXValue,
       offsetYInput,
       offsetYValue,
+      offsetZInput,
+      offsetZValue,
       panel: transformPanel,
     },
     mesh: {
@@ -741,7 +762,7 @@ function createToolbar(): {
         button.style.opacity = disableMesh ? "0.42" : "0.92";
       }
 
-      for (const input of [scaleInput, offsetXInput, offsetYInput]) {
+      for (const input of [scaleInput, offsetXInput, offsetYInput, offsetZInput]) {
         input.disabled = disableTransform;
         input.style.cursor = disableTransform ? (isRendering ? "wait" : "default") : "pointer";
         input.style.opacity = disableTransform ? "0.42" : "0.96";
