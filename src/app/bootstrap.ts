@@ -3,6 +3,16 @@ import { applyRetroGrade } from "../renderer/postprocess";
 import { Renderer } from "../renderer/renderer";
 
 type ViewMode = "edit" | "render";
+type MaterialControlElements = {
+  colorInput: HTMLInputElement;
+  surfaceInput: HTMLInputElement;
+  surfaceValue: HTMLSpanElement;
+  glossInput: HTMLInputElement;
+  glossValue: HTMLSpanElement;
+  bleedInput: HTMLInputElement;
+  bleedValue: HTMLSpanElement;
+  panel: HTMLDivElement;
+};
 
 export async function bootstrap(): Promise<void> {
   const canvas = document.createElement("canvas");
@@ -94,6 +104,12 @@ export async function bootstrap(): Promise<void> {
     resize();
 
     status.remove();
+    renderer.setMaterial({
+      color: hexToRgb(toolbar.material.colorInput.value),
+      surface: Number(toolbar.material.surfaceInput.value),
+      gloss: Number(toolbar.material.glossInput.value),
+      bleed: Number(toolbar.material.bleedInput.value),
+    });
 
     toolbar.setMode(mode, isRendering);
     toolbar.editButton.addEventListener("click", () => {
@@ -176,6 +192,26 @@ export async function bootstrap(): Promise<void> {
 
       renderer.rotate(0, toolbarRotateStep);
     });
+    toolbar.material.colorInput.addEventListener("input", () => {
+      renderer.setMaterial({
+        color: hexToRgb(toolbar.material.colorInput.value),
+      });
+    });
+    toolbar.material.surfaceInput.addEventListener("input", () => {
+      const surface = Number(toolbar.material.surfaceInput.value);
+      toolbar.material.surfaceValue.textContent = surface.toFixed(2);
+      renderer.setMaterial({ surface });
+    });
+    toolbar.material.glossInput.addEventListener("input", () => {
+      const gloss = Number(toolbar.material.glossInput.value);
+      toolbar.material.glossValue.textContent = gloss.toFixed(2);
+      renderer.setMaterial({ gloss });
+    });
+    toolbar.material.bleedInput.addEventListener("input", () => {
+      const bleed = Number(toolbar.material.bleedInput.value);
+      toolbar.material.bleedValue.textContent = bleed.toFixed(2);
+      renderer.setMaterial({ bleed });
+    });
 
     function syncModeUi(): void {
       const isEditMode = mode === "edit";
@@ -231,6 +267,7 @@ function createToolbar(): {
   rotateDownButton: HTMLButtonElement;
   rotateLeftButton: HTMLButtonElement;
   rotateRightButton: HTMLButtonElement;
+  material: MaterialControlElements;
   setMode: (mode: ViewMode, isRendering: boolean) => void;
 } {
   const toolbar = document.createElement("div");
@@ -245,6 +282,18 @@ function createToolbar(): {
   const rotateLeftButton = document.createElement("button");
   const rotateDownButton = document.createElement("button");
   const rotateRightButton = document.createElement("button");
+  const materialPanel = document.createElement("div");
+  const colorLabel = document.createElement("label");
+  const colorInput = document.createElement("input");
+  const surfaceLabel = document.createElement("label");
+  const surfaceInput = document.createElement("input");
+  const surfaceValue = document.createElement("span");
+  const glossLabel = document.createElement("label");
+  const glossInput = document.createElement("input");
+  const glossValue = document.createElement("span");
+  const bleedLabel = document.createElement("label");
+  const bleedInput = document.createElement("input");
+  const bleedValue = document.createElement("span");
   const loadingBorder = document.createElement("div");
 
   let pointerId: number | null = null;
@@ -331,8 +380,59 @@ function createToolbar(): {
   rotateRightButton.style.gridColumn = "3";
   rotateRightButton.style.gridRow = "2";
 
+  Object.assign(materialPanel.style, {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, auto))",
+    gap: "8px 12px",
+    padding: "10px 12px",
+    border: "1px solid rgba(187, 204, 240, 0.18)",
+    borderRadius: "14px",
+    background: "linear-gradient(180deg, rgba(14, 19, 39, 0.42), rgba(10, 14, 28, 0.26))",
+    alignItems: "center",
+    minWidth: "212px",
+  });
+
+  configureMaterialLabel(colorLabel, "color");
+  configureMaterialLabel(surfaceLabel, "surface");
+  configureMaterialLabel(glossLabel, "gloss");
+  configureMaterialLabel(bleedLabel, "bleed");
+
+  colorInput.type = "color";
+  colorInput.value = "#38c2dc";
+  colorInput.setAttribute("aria-label", "Cube material color");
+  Object.assign(colorInput.style, {
+    width: "40px",
+    height: "28px",
+    padding: "0",
+    border: "1px solid rgba(196, 214, 255, 0.28)",
+    borderRadius: "8px",
+    background: "transparent",
+    cursor: "pointer",
+  });
+
+  configureMaterialRange(surfaceInput, "Cube material surface");
+  surfaceInput.value = "0.38";
+  configureMaterialRange(glossInput, "Cube material gloss");
+  glossInput.value = "0.62";
+  configureMaterialRange(bleedInput, "Cube material light bleed");
+  bleedInput.value = "0.22";
+
+  configureMaterialValue(surfaceValue, surfaceInput.value);
+  configureMaterialValue(glossValue, glossInput.value);
+  configureMaterialValue(bleedValue, bleedInput.value);
+
   actionCluster.append(downloadButton, copyButton);
   rotateCluster.append(rotateUpButton, rotateLeftButton, rotateDownButton, rotateRightButton);
+  materialPanel.append(
+    colorLabel,
+    colorInput,
+    surfaceLabel,
+    wrapMaterialRange(surfaceInput, surfaceValue),
+    glossLabel,
+    wrapMaterialRange(glossInput, glossValue),
+    bleedLabel,
+    wrapMaterialRange(bleedInput, bleedValue),
+  );
 
   handle.addEventListener("pointerdown", (event) => {
     pointerId = event.pointerId;
@@ -374,7 +474,7 @@ function createToolbar(): {
   handle.addEventListener("pointerup", endDrag);
   handle.addEventListener("pointercancel", endDrag);
 
-  toolbar.append(loadingBorder, handle, editButton, renderButton, actionCluster, rotateCluster);
+  toolbar.append(loadingBorder, handle, editButton, renderButton, actionCluster, rotateCluster, materialPanel);
 
   return {
     element: toolbar,
@@ -386,9 +486,20 @@ function createToolbar(): {
     rotateDownButton,
     rotateLeftButton,
     rotateRightButton,
+    material: {
+      colorInput,
+      surfaceInput,
+      surfaceValue,
+      glossInput,
+      glossValue,
+      bleedInput,
+      bleedValue,
+      panel: materialPanel,
+    },
     setMode: (mode, isRendering) => {
       const disableRotation = isRendering || mode !== "edit";
       const disableRenderActions = isRendering || mode !== "render";
+      const disableMaterial = isRendering;
 
       setButtonState(editButton, mode === "edit" ? "active" : "idle");
       setButtonState(renderButton, mode === "render" ? "active" : "idle");
@@ -411,6 +522,14 @@ function createToolbar(): {
         button.style.cursor = disableRotation ? (isRendering ? "wait" : "default") : "pointer";
         button.style.opacity = disableRotation ? "0.42" : "0.92";
       }
+
+      for (const input of [colorInput, surfaceInput, glossInput, bleedInput]) {
+        input.disabled = disableMaterial;
+        input.style.cursor = disableMaterial ? (isRendering ? "wait" : "default") : "pointer";
+        input.style.opacity = disableMaterial ? "0.42" : "0.96";
+      }
+
+      materialPanel.style.opacity = disableMaterial ? "0.56" : "1";
     },
   };
 }
@@ -472,6 +591,59 @@ function configureRotateButton(button: HTMLButtonElement, label: string, title: 
   });
 }
 
+function configureMaterialLabel(label: HTMLLabelElement, text: string): void {
+  label.textContent = text;
+
+  Object.assign(label.style, {
+    color: "rgba(222, 233, 255, 0.9)",
+    fontFamily: "\"IBM Plex Sans\", \"Avenir Next\", sans-serif",
+    fontSize: "12px",
+    fontWeight: "600",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+  });
+}
+
+function configureMaterialRange(input: HTMLInputElement, label: string): void {
+  input.type = "range";
+  input.min = "0";
+  input.max = "1";
+  input.step = "0.01";
+  input.setAttribute("aria-label", label);
+
+  Object.assign(input.style, {
+    width: "100%",
+    margin: "0",
+    accentColor: "#d4e7ff",
+  });
+}
+
+function configureMaterialValue(value: HTMLSpanElement, text: string): void {
+  value.textContent = Number(text).toFixed(2);
+
+  Object.assign(value.style, {
+    minWidth: "32px",
+    color: "rgba(230, 238, 255, 0.82)",
+    fontFamily: "monospace",
+    fontSize: "12px",
+    textAlign: "right",
+  });
+}
+
+function wrapMaterialRange(input: HTMLInputElement, value: HTMLSpanElement): HTMLDivElement {
+  const wrapper = document.createElement("div");
+
+  Object.assign(wrapper.style, {
+    display: "grid",
+    gridTemplateColumns: "1fr auto",
+    gap: "8px",
+    alignItems: "center",
+  });
+
+  wrapper.append(input, value);
+  return wrapper;
+}
+
 function setButtonState(button: HTMLButtonElement, state: ToolbarButtonState): void {
   if (state === "active") {
     button.style.background =
@@ -494,6 +666,17 @@ function nextFrame(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => resolve());
   });
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const normalized = hex.replace("#", "");
+  const value = Number.parseInt(normalized, 16);
+
+  return {
+    r: ((value >> 16) & 255) / 255,
+    g: ((value >> 8) & 255) / 255,
+    b: (value & 255) / 255,
+  };
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {

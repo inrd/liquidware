@@ -16,7 +16,9 @@ interface GPUDevice {
   readonly queue: GPUQueue;
   createBuffer(descriptor: GPUBufferDescriptor): GPUBuffer;
   createBindGroup(descriptor: GPUBindGroupDescriptor): GPUBindGroup;
+  createBindGroupLayout(descriptor: GPUBindGroupLayoutDescriptor): GPUBindGroupLayout;
   createCommandEncoder(): GPUCommandEncoder;
+  createPipelineLayout(descriptor: GPUPipelineLayoutDescriptor): GPUPipelineLayout;
   createShaderModule(descriptor: GPUShaderModuleDescriptor): GPUShaderModule;
   createRenderPipeline(descriptor: GPURenderPipelineDescriptor): GPURenderPipeline;
   createTexture(descriptor: GPUTextureDescriptor): GPUTexture;
@@ -106,6 +108,20 @@ interface GPURenderPipeline {
 
 interface GPUBindGroupLayout {}
 
+interface GPUBindGroupLayoutDescriptor {
+  entries: GPUBindGroupLayoutEntry[];
+}
+
+interface GPUBindGroupLayoutEntry {
+  binding: number;
+  visibility: number;
+  buffer?: GPUBufferBindingLayout;
+}
+
+interface GPUBufferBindingLayout {
+  type?: "uniform" | "storage" | "read-only-storage";
+}
+
 interface GPURenderPipelineDescriptor {
   layout: GPUPipelineLayout | "auto";
   vertex: GPUVertexState;
@@ -139,10 +155,12 @@ interface GPUFragmentState {
 
 interface GPUColorTargetState {
   format: GPUTextureFormat;
+  blend?: GPUBlendState;
 }
 
 interface GPUPrimitiveState {
   topology?: GPUPrimitiveTopology;
+  cullMode?: GPUCullMode;
 }
 
 interface GPUDepthStencilState {
@@ -152,7 +170,35 @@ interface GPUDepthStencilState {
 }
 
 type GPUPrimitiveTopology = "triangle-list" | "triangle-strip" | "line-list" | "line-strip" | "point-list";
+type GPUBlendFactor =
+  | "zero"
+  | "one"
+  | "src"
+  | "one-minus-src"
+  | "src-alpha"
+  | "one-minus-src-alpha"
+  | "dst"
+  | "one-minus-dst"
+  | "dst-alpha"
+  | "one-minus-dst-alpha";
+type GPUBlendOperation = "add" | "subtract" | "reverse-subtract" | "min" | "max";
+type GPUCullMode = "none" | "front" | "back";
+interface GPUPipelineLayoutDescriptor {
+  bindGroupLayouts: GPUBindGroupLayout[];
+}
+
 type GPUPipelineLayout = object;
+
+interface GPUBlendComponent {
+  srcFactor?: GPUBlendFactor;
+  dstFactor?: GPUBlendFactor;
+  operation?: GPUBlendOperation;
+}
+
+interface GPUBlendState {
+  color: GPUBlendComponent;
+  alpha: GPUBlendComponent;
+}
 
 interface GPUCanvasContext {
   configure(configuration: GPUCanvasConfiguration): void;
@@ -196,6 +242,12 @@ declare const GPUBufferUsage: {
   readonly INDEX: number;
   readonly UNIFORM: number;
   readonly VERTEX: number;
+};
+
+declare const GPUShaderStage: {
+  readonly VERTEX: number;
+  readonly FRAGMENT: number;
+  readonly COMPUTE: number;
 };
 
 declare const GPUTextureUsage: {

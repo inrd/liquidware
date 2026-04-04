@@ -12,9 +12,23 @@ import {
 const CUBE_VERTEX_STRIDE = 9 * Float32Array.BYTES_PER_ELEMENT;
 const CUBE_INDEX_COUNT = 36;
 const FLOOR_INDEX_COUNT = 6;
-const SCENE_UNIFORM_FLOAT_COUNT = MATRIX_FLOAT_COUNT * 2 + 4;
+const SCENE_UNIFORM_FLOAT_COUNT = MATRIX_FLOAT_COUNT * 2 + 12;
 const SCENE_UNIFORM_BUFFER_SIZE = SCENE_UNIFORM_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
 const DEPTH_FORMAT = "depth24plus";
+
+type MaterialSettings = {
+  color: { r: number; g: number; b: number };
+  surface: number;
+  gloss: number;
+  bleed: number;
+};
+
+const DEFAULT_MATERIAL: MaterialSettings = {
+  color: { r: 0.22, g: 0.76, b: 0.88 },
+  surface: 0.38,
+  gloss: 0.62,
+  bleed: 0.22,
+};
 
 export class Renderer {
   private readonly canvas: HTMLCanvasElement;
@@ -23,6 +37,7 @@ export class Renderer {
   private context: GPUCanvasContext | null = null;
   private presentationFormat: GPUTextureFormat | null = null;
   private skyPipeline: GPURenderPipeline | null = null;
+  private shadowPipeline: GPURenderPipeline | null = null;
   private pipeline: GPURenderPipeline | null = null;
   private vertexBuffer: GPUBuffer | null = null;
   private indexBuffer: GPUBuffer | null = null;
@@ -34,6 +49,7 @@ export class Renderer {
   private depthTextureView: GPUTextureView | null = null;
   private rotationX = INITIAL_ROTATION_X;
   private rotationY = INITIAL_ROTATION_Y;
+  private material: MaterialSettings = DEFAULT_MATERIAL;
 
   public constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -75,11 +91,23 @@ export class Renderer {
     this.rotationY = nextRotation.rotationY;
   }
 
+  public setMaterial(nextMaterial: Partial<MaterialSettings>): void {
+    this.material = {
+      ...this.material,
+      ...nextMaterial,
+      color: {
+        ...this.material.color,
+        ...nextMaterial.color,
+      },
+    };
+  }
+
   public render(): void {
     if (
       !this.device ||
       !this.context ||
       !this.skyPipeline ||
+      !this.shadowPipeline ||
       !this.pipeline ||
       !this.vertexBuffer ||
       !this.indexBuffer ||
@@ -115,10 +143,14 @@ export class Renderer {
     renderPass.setPipeline(this.pipeline);
     renderPass.setVertexBuffer(0, this.vertexBuffer);
     renderPass.setIndexBuffer(this.indexBuffer, "uint16");
-    renderPass.setBindGroup(0, this.cubeBindGroup);
-    renderPass.drawIndexed(CUBE_INDEX_COUNT);
     renderPass.setBindGroup(0, this.floorBindGroup);
     renderPass.drawIndexed(FLOOR_INDEX_COUNT, 1, CUBE_INDEX_COUNT);
+    renderPass.setPipeline(this.shadowPipeline);
+    renderPass.setBindGroup(0, this.cubeBindGroup);
+    renderPass.drawIndexed(CUBE_INDEX_COUNT);
+    renderPass.setPipeline(this.pipeline);
+    renderPass.setBindGroup(0, this.cubeBindGroup);
+    renderPass.drawIndexed(CUBE_INDEX_COUNT);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
   }
@@ -215,6 +247,22 @@ export class Renderer {
       code: shaderSource,
     });
 
+    const sceneBindGroupLayout = this.device.createBindGroupLayout({
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+          buffer: {
+            type: "uniform",
+          },
+        },
+      ],
+    });
+
+    const scenePipelineLayout = this.device.createPipelineLayout({
+      bindGroupLayouts: [sceneBindGroupLayout],
+    });
+
     this.skyPipeline = this.device.createRenderPipeline({
       layout: "auto",
       vertex: {
@@ -241,7 +289,7 @@ export class Renderer {
     });
 
     this.pipeline = this.device.createRenderPipeline({
-      layout: "auto",
+      layout: scenePipelineLayout,
       vertex: {
         module: shaderModule,
         entryPoint: "vs_main",
@@ -287,10 +335,68 @@ export class Renderer {
       },
     });
 
-    const bindGroupLayout = this.pipeline.getBindGroupLayout(0);
+    this.shadowPipeline = this.device.createRenderPipeline({
+      layout: scenePipelineLayout,
+      vertex: {
+        module: shaderModule,
+        entryPoint: "shadow_vs_main",
+        buffers: [
+          {
+            arrayStride: CUBE_VERTEX_STRIDE,
+            attributes: [
+              {
+                shaderLocation: 0,
+                offset: 0,
+                format: "float32x3",
+              },
+              {
+                shaderLocation: 1,
+                offset: 3 * Float32Array.BYTES_PER_ELEMENT,
+                format: "float32x3",
+              },
+              {
+                shaderLocation: 2,
+                offset: 6 * Float32Array.BYTES_PER_ELEMENT,
+                format: "float32x3",
+              },
+            ],
+          },
+        ],
+      },
+      fragment: {
+        module: shaderModule,
+        entryPoint: "shadow_fs_main",
+        targets: [
+          {
+            format: this.presentationFormat,
+            blend: {
+              color: {
+                srcFactor: "src-alpha",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add",
+              },
+              alpha: {
+                srcFactor: "one",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add",
+              },
+            },
+          },
+        ],
+      },
+      primitive: {
+        topology: "triangle-list",
+        cullMode: "none",
+      },
+      depthStencil: {
+        format: DEPTH_FORMAT,
+        depthWriteEnabled: false,
+        depthCompare: "less",
+      },
+    });
 
     this.cubeBindGroup = this.device.createBindGroup({
-      layout: bindGroupLayout,
+      layout: sceneBindGroupLayout,
       entries: [
         {
           binding: 0,
@@ -302,7 +408,7 @@ export class Renderer {
     });
 
     this.floorBindGroup = this.device.createBindGroup({
-      layout: bindGroupLayout,
+      layout: sceneBindGroupLayout,
       entries: [
         {
           binding: 0,
@@ -320,21 +426,36 @@ export class Renderer {
     }
 
     const aspectRatio = this.canvas.width / this.canvas.height;
-    const sceneModelViewProjection = buildModelViewProjectionMatrix(
+    const sceneViewProjection = buildModelViewProjectionMatrix(
       aspectRatio,
       this.rotationX,
       this.rotationY,
     );
     const sceneModelMatrix = createIdentityMatrix();
     const cameraPosition = buildCameraPosition(this.rotationX, this.rotationY);
-    const sceneUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
+    const cubeUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
+    const floorUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
 
-    sceneUniforms.set(sceneModelViewProjection, 0);
-    sceneUniforms.set(sceneModelMatrix, MATRIX_FLOAT_COUNT);
-    sceneUniforms.set(cameraPosition, MATRIX_FLOAT_COUNT * 2);
+    cubeUniforms.set(sceneViewProjection, 0);
+    cubeUniforms.set(sceneModelMatrix, MATRIX_FLOAT_COUNT);
+    cubeUniforms.set(cameraPosition, MATRIX_FLOAT_COUNT * 2);
+    cubeUniforms.set(
+      [this.material.color.r, this.material.color.g, this.material.color.b, 1],
+      MATRIX_FLOAT_COUNT * 2 + 4,
+    );
+    cubeUniforms.set(
+      [this.material.surface, this.material.gloss, this.material.bleed, 0],
+      MATRIX_FLOAT_COUNT * 2 + 8,
+    );
 
-    this.device.queue.writeBuffer(this.cubeUniformBuffer, 0, sceneUniforms);
-    this.device.queue.writeBuffer(this.floorUniformBuffer, 0, sceneUniforms);
+    floorUniforms.set(sceneViewProjection, 0);
+    floorUniforms.set(sceneModelMatrix, MATRIX_FLOAT_COUNT);
+    floorUniforms.set(cameraPosition, MATRIX_FLOAT_COUNT * 2);
+    floorUniforms.set([0, 0, 0, 0], MATRIX_FLOAT_COUNT * 2 + 4);
+    floorUniforms.set([1, 0.08, 1, 0], MATRIX_FLOAT_COUNT * 2 + 8);
+
+    this.device.queue.writeBuffer(this.cubeUniformBuffer, 0, cubeUniforms);
+    this.device.queue.writeBuffer(this.floorUniformBuffer, 0, floorUniforms);
   }
 
   private createDepthTexture(): void {
