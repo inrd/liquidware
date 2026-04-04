@@ -89,8 +89,8 @@ export function buildModelViewProjectionMatrix(
   rotationX: number,
   rotationY: number,
 ): Mat4 {
-  const projection = perspectiveMatrix((60 * Math.PI) / 180, aspectRatio, 0.1, 100);
-  const view = translationMatrix(0, 0, -3.2);
+  const projection = buildProjectionMatrix(aspectRatio);
+  const view = buildViewMatrix();
   const model = buildModelMatrix(rotationX, rotationY);
   const viewModel = multiplyMatrices(view, model);
 
@@ -101,4 +101,25 @@ export function buildModelMatrix(rotationX: number, rotationY: number): Mat4 {
   const modelRotationX = rotationXMatrix(rotationX);
   const modelRotationY = rotationYMatrix(rotationY);
   return multiplyMatrices(modelRotationY, modelRotationX);
+}
+
+export function buildViewProjectionMatrix(aspectRatio: number): Mat4 {
+  return multiplyMatrices(buildProjectionMatrix(aspectRatio), buildViewMatrix());
+}
+
+export function createIdentityMatrix(): Mat4 {
+  return new Float32Array([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  ]);
+}
+
+function buildProjectionMatrix(aspectRatio: number): Mat4 {
+  return perspectiveMatrix((60 * Math.PI) / 180, aspectRatio, 0.1, 100);
+}
+
+function buildViewMatrix(): Mat4 {
+  return translationMatrix(0, 0, -3.2);
 }

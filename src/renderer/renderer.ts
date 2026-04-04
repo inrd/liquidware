@@ -6,10 +6,13 @@ import {
   applyRotation,
   buildModelMatrix,
   buildModelViewProjectionMatrix,
+  buildViewProjectionMatrix,
+  createIdentityMatrix,
 } from "./math";
 
 const CUBE_VERTEX_STRIDE = 9 * Float32Array.BYTES_PER_ELEMENT;
 const CUBE_INDEX_COUNT = 36;
+const FLOOR_INDEX_COUNT = 6;
 const SCENE_UNIFORM_FLOAT_COUNT = MATRIX_FLOAT_COUNT * 2;
 const SCENE_UNIFORM_BUFFER_SIZE = SCENE_UNIFORM_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
 const DEPTH_FORMAT = "depth24plus";
@@ -20,11 +23,14 @@ export class Renderer {
   private device: GPUDevice | null = null;
   private context: GPUCanvasContext | null = null;
   private presentationFormat: GPUTextureFormat | null = null;
+  private skyPipeline: GPURenderPipeline | null = null;
   private pipeline: GPURenderPipeline | null = null;
   private vertexBuffer: GPUBuffer | null = null;
   private indexBuffer: GPUBuffer | null = null;
-  private uniformBuffer: GPUBuffer | null = null;
-  private bindGroup: GPUBindGroup | null = null;
+  private cubeUniformBuffer: GPUBuffer | null = null;
+  private floorUniformBuffer: GPUBuffer | null = null;
+  private cubeBindGroup: GPUBindGroup | null = null;
+  private floorBindGroup: GPUBindGroup | null = null;
   private depthTexture: GPUTexture | null = null;
   private depthTextureView: GPUTextureView | null = null;
   private rotationX = INITIAL_ROTATION_X;
@@ -74,11 +80,12 @@ export class Renderer {
     if (
       !this.device ||
       !this.context ||
+      !this.skyPipeline ||
       !this.pipeline ||
       !this.vertexBuffer ||
       !this.indexBuffer ||
-      !this.uniformBuffer ||
-      !this.bindGroup ||
+      !this.cubeBindGroup ||
+      !this.floorBindGroup ||
       !this.depthTextureView
     ) {
       return;
@@ -91,7 +98,7 @@ export class Renderer {
       colorAttachments: [
         {
           view: this.context.getCurrentTexture().createView(),
-          clearValue: { r: 0.04, g: 0.08, b: 0.17, a: 1 },
+          clearValue: { r: 0.78, g: 0.63, b: 0.7, a: 1 },
           loadOp: "clear",
           storeOp: "store",
         },
@@ -104,11 +111,15 @@ export class Renderer {
       },
     });
 
+    renderPass.setPipeline(this.skyPipeline);
+    renderPass.draw(3);
     renderPass.setPipeline(this.pipeline);
-    renderPass.setBindGroup(0, this.bindGroup);
     renderPass.setVertexBuffer(0, this.vertexBuffer);
     renderPass.setIndexBuffer(this.indexBuffer, "uint16");
+    renderPass.setBindGroup(0, this.cubeBindGroup);
     renderPass.drawIndexed(CUBE_INDEX_COUNT);
+    renderPass.setBindGroup(0, this.floorBindGroup);
+    renderPass.drawIndexed(FLOOR_INDEX_COUNT, 1, CUBE_INDEX_COUNT);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
   }
@@ -162,6 +173,11 @@ export class Renderer {
        0.5, -0.5, -0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
        0.5, -0.5,  0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
       -0.5, -0.5,  0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
+
+      -4.0, -1.05, -4.5, 0.82, 0.77, 0.71,  0.0,  1.0,  0.0,
+       4.0, -1.05, -4.5, 0.82, 0.77, 0.71,  0.0,  1.0,  0.0,
+       4.0, -1.05,  4.5, 0.82, 0.77, 0.71,  0.0,  1.0,  0.0,
+      -4.0, -1.05,  4.5, 0.82, 0.77, 0.71,  0.0,  1.0,  0.0,
     ]);
 
     this.vertexBuffer = this.device.createBuffer({
@@ -177,6 +193,7 @@ export class Renderer {
       12, 13, 14, 12, 14, 15,
       16, 17, 18, 16, 18, 19,
       20, 21, 22, 20, 22, 23,
+      24, 25, 26, 24, 26, 27,
     ]);
 
     this.indexBuffer = this.device.createBuffer({
@@ -185,13 +202,43 @@ export class Renderer {
     });
     this.device.queue.writeBuffer(this.indexBuffer, 0, indices);
 
-    this.uniformBuffer = this.device.createBuffer({
+    this.cubeUniformBuffer = this.device.createBuffer({
+      size: SCENE_UNIFORM_BUFFER_SIZE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    this.floorUniformBuffer = this.device.createBuffer({
       size: SCENE_UNIFORM_BUFFER_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
     const shaderModule = this.device.createShaderModule({
       code: shaderSource,
+    });
+
+    this.skyPipeline = this.device.createRenderPipeline({
+      layout: "auto",
+      vertex: {
+        module: shaderModule,
+        entryPoint: "sky_vs_main",
+      },
+      fragment: {
+        module: shaderModule,
+        entryPoint: "sky_fs_main",
+        targets: [
+          {
+            format: this.presentationFormat,
+          },
+        ],
+      },
+      primitive: {
+        topology: "triangle-list",
+      },
+      depthStencil: {
+        format: DEPTH_FORMAT,
+        depthWriteEnabled: false,
+        depthCompare: "always",
+      },
     });
 
     this.pipeline = this.device.createRenderPipeline({
@@ -241,13 +288,27 @@ export class Renderer {
       },
     });
 
-    this.bindGroup = this.device.createBindGroup({
-      layout: this.pipeline.getBindGroupLayout(0),
+    const bindGroupLayout = this.pipeline.getBindGroupLayout(0);
+
+    this.cubeBindGroup = this.device.createBindGroup({
+      layout: bindGroupLayout,
       entries: [
         {
           binding: 0,
           resource: {
-            buffer: this.uniformBuffer,
+            buffer: this.cubeUniformBuffer,
+          },
+        },
+      ],
+    });
+
+    this.floorBindGroup = this.device.createBindGroup({
+      layout: bindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: this.floorUniformBuffer,
           },
         },
       ],
@@ -255,23 +316,29 @@ export class Renderer {
   }
 
   private updateSceneUniforms(): void {
-    if (!this.device || !this.uniformBuffer) {
+    if (!this.device || !this.cubeUniformBuffer || !this.floorUniformBuffer) {
       return;
     }
 
     const aspectRatio = this.canvas.width / this.canvas.height;
-    const modelViewProjection = buildModelViewProjectionMatrix(
+    const cubeModelViewProjection = buildModelViewProjectionMatrix(
       aspectRatio,
       this.rotationX,
       this.rotationY,
     );
-    const modelMatrix = buildModelMatrix(this.rotationX, this.rotationY);
-    const sceneUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
+    const cubeModelMatrix = buildModelMatrix(this.rotationX, this.rotationY);
+    const floorModelViewProjection = buildViewProjectionMatrix(aspectRatio);
+    const floorModelMatrix = createIdentityMatrix();
+    const cubeSceneUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
+    const floorSceneUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
 
-    sceneUniforms.set(modelViewProjection, 0);
-    sceneUniforms.set(modelMatrix, MATRIX_FLOAT_COUNT);
+    cubeSceneUniforms.set(cubeModelViewProjection, 0);
+    cubeSceneUniforms.set(cubeModelMatrix, MATRIX_FLOAT_COUNT);
+    floorSceneUniforms.set(floorModelViewProjection, 0);
+    floorSceneUniforms.set(floorModelMatrix, MATRIX_FLOAT_COUNT);
 
-    this.device.queue.writeBuffer(this.uniformBuffer, 0, sceneUniforms);
+    this.device.queue.writeBuffer(this.cubeUniformBuffer, 0, cubeSceneUniforms);
+    this.device.queue.writeBuffer(this.floorUniformBuffer, 0, floorSceneUniforms);
   }
 
   private createDepthTexture(): void {
