@@ -1,12 +1,16 @@
 import shaderSource from "./shaders.wgsl?raw";
+import {
+  INITIAL_ROTATION_X,
+  INITIAL_ROTATION_Y,
+  MATRIX_FLOAT_COUNT,
+  applyRotation,
+  buildModelViewProjectionMatrix,
+} from "./math";
 
 const CUBE_VERTEX_STRIDE = 6 * Float32Array.BYTES_PER_ELEMENT;
 const CUBE_INDEX_COUNT = 36;
-const MATRIX_FLOAT_COUNT = 16;
 const MATRIX_BUFFER_SIZE = MATRIX_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
 const DEPTH_FORMAT = "depth24plus";
-
-type Mat4 = Float32Array;
 
 export class Renderer {
   private readonly canvas: HTMLCanvasElement;
@@ -21,8 +25,8 @@ export class Renderer {
   private bindGroup: GPUBindGroup | null = null;
   private depthTexture: GPUTexture | null = null;
   private depthTextureView: GPUTextureView | null = null;
-  private rotationX = -0.45;
-  private rotationY = 0.7;
+  private rotationX = INITIAL_ROTATION_X;
+  private rotationY = INITIAL_ROTATION_Y;
 
   public constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -59,8 +63,9 @@ export class Renderer {
   }
 
   public rotate(deltaX: number, deltaY: number): void {
-    this.rotationX = clamp(this.rotationX + deltaX, -Math.PI * 0.45, Math.PI * 0.45);
-    this.rotationY += deltaY;
+    const nextRotation = applyRotation(this.rotationX, this.rotationY, deltaX, deltaY);
+    this.rotationX = nextRotation.rotationX;
+    this.rotationY = nextRotation.rotationY;
   }
 
   public render(): void {
@@ -248,13 +253,11 @@ export class Renderer {
     }
 
     const aspectRatio = this.canvas.width / this.canvas.height;
-    const projection = perspectiveMatrix((60 * Math.PI) / 180, aspectRatio, 0.1, 100);
-    const view = translationMatrix(0, 0, -3.2);
-    const rotationX = rotationXMatrix(this.rotationX);
-    const rotationY = rotationYMatrix(this.rotationY);
-    const model = multiplyMatrices(rotationY, rotationX);
-    const viewModel = multiplyMatrices(view, model);
-    const modelViewProjection = multiplyMatrices(projection, viewModel);
+    const modelViewProjection = buildModelViewProjectionMatrix(
+      aspectRatio,
+      this.rotationX,
+      this.rotationY,
+    );
 
     this.device.queue.writeBuffer(this.uniformBuffer, 0, modelViewProjection);
   }
@@ -275,71 +278,4 @@ export class Renderer {
     });
     this.depthTextureView = this.depthTexture.createView();
   }
-}
-
-function perspectiveMatrix(fieldOfView: number, aspectRatio: number, near: number, far: number): Mat4 {
-  const f = 1 / Math.tan(fieldOfView / 2);
-  const rangeInverse = 1 / (near - far);
-
-  return new Float32Array([
-    f / aspectRatio, 0, 0, 0,
-    0, f, 0, 0,
-    0, 0, far * rangeInverse, -1,
-    0, 0, near * far * rangeInverse, 0,
-  ]);
-}
-
-function translationMatrix(x: number, y: number, z: number): Mat4 {
-  return new Float32Array([
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    x, y, z, 1,
-  ]);
-}
-
-function rotationXMatrix(angle: number): Mat4 {
-  const s = Math.sin(angle);
-  const c = Math.cos(angle);
-
-  return new Float32Array([
-    1, 0, 0, 0,
-    0, c, s, 0,
-    0, -s, c, 0,
-    0, 0, 0, 1,
-  ]);
-}
-
-function rotationYMatrix(angle: number): Mat4 {
-  const s = Math.sin(angle);
-  const c = Math.cos(angle);
-
-  return new Float32Array([
-    c, 0, -s, 0,
-    0, 1, 0, 0,
-    s, 0, c, 0,
-    0, 0, 0, 1,
-  ]);
-}
-
-function multiplyMatrices(a: Mat4, b: Mat4): Mat4 {
-  const result = new Float32Array(MATRIX_FLOAT_COUNT);
-
-  for (let column = 0; column < 4; column += 1) {
-    for (let row = 0; row < 4; row += 1) {
-      let sum = 0;
-
-      for (let i = 0; i < 4; i += 1) {
-        sum += a[i * 4 + row] * b[column * 4 + i];
-      }
-
-      result[column * 4 + row] = sum;
-    }
-  }
-
-  return result;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }

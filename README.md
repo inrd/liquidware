@@ -15,6 +15,12 @@ npm run dev
 npm run build
 ```
 
+## Test
+
+```bash
+npm test
+```
+
 ## Controls
 
 - Arrow keys rotate the cube.
