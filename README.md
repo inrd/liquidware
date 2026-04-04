@@ -27,6 +27,8 @@ npm test
 
 - A floating toolbar overlaps the canvas; drag it by its handle to move it around.
 - Rotate the scene via mouse drag, keyboard arrow keys or toolbar arrows.
-- Use the toolbar material controls to set the cube's single base color plus surface character, stylized gloss, and retro light bleed.
+- Use `load .obj` to replace the default cube with a local OBJ mesh, or `cube` to switch back.
+- Imported OBJ files are auto-centered, auto-scaled, and currently support polygon faces with `v`, optional `vn`, and `f` records.
+- Use the toolbar material controls to set the active mesh's single base color plus surface character, stylized gloss, and retro light bleed.
 - `edit` shows the live WebGPU canvas and keeps rotation controls enabled.
 - `render` captures a rasterized still of the current scene, applies some post-processing treatments, and provides `download` and `copy` options.

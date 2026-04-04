@@ -1,5 +1,11 @@
 import shaderSource from "./shaders.wgsl?raw";
 import {
+  MESH_VERTEX_STRIDE,
+  MeshData,
+  createDefaultCubeMesh,
+  createFloorMesh,
+} from "./mesh";
+import {
   INITIAL_ROTATION_X,
   INITIAL_ROTATION_Y,
   MATRIX_FLOAT_COUNT,
@@ -9,9 +15,6 @@ import {
   createIdentityMatrix,
 } from "./math";
 
-const CUBE_VERTEX_STRIDE = 9 * Float32Array.BYTES_PER_ELEMENT;
-const CUBE_INDEX_COUNT = 36;
-const FLOOR_INDEX_COUNT = 6;
 const SCENE_UNIFORM_FLOAT_COUNT = MATRIX_FLOAT_COUNT * 2 + 12;
 const SCENE_UNIFORM_BUFFER_SIZE = SCENE_UNIFORM_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
 const DEPTH_FORMAT = "depth24plus";
@@ -39,11 +42,17 @@ export class Renderer {
   private skyPipeline: GPURenderPipeline | null = null;
   private shadowPipeline: GPURenderPipeline | null = null;
   private pipeline: GPURenderPipeline | null = null;
-  private vertexBuffer: GPUBuffer | null = null;
-  private indexBuffer: GPUBuffer | null = null;
-  private cubeUniformBuffer: GPUBuffer | null = null;
+  private objectVertexBuffer: GPUBuffer | null = null;
+  private objectIndexBuffer: GPUBuffer | null = null;
+  private objectIndexCount = 0;
+  private objectIndexFormat: GPUIndexFormat = "uint16";
+  private floorVertexBuffer: GPUBuffer | null = null;
+  private floorIndexBuffer: GPUBuffer | null = null;
+  private floorIndexCount = 0;
+  private floorIndexFormat: GPUIndexFormat = "uint16";
+  private objectUniformBuffer: GPUBuffer | null = null;
   private floorUniformBuffer: GPUBuffer | null = null;
-  private cubeBindGroup: GPUBindGroup | null = null;
+  private objectBindGroup: GPUBindGroup | null = null;
   private floorBindGroup: GPUBindGroup | null = null;
   private depthTexture: GPUTexture | null = null;
   private depthTextureView: GPUTextureView | null = null;
@@ -102,6 +111,21 @@ export class Renderer {
     };
   }
 
+  public setObjectMesh(mesh: MeshData): void {
+    if (!this.device) {
+      return;
+    }
+
+    this.objectVertexBuffer = this.createVertexBuffer(mesh.vertices);
+    this.objectIndexBuffer = this.createIndexBuffer(mesh.indices);
+    this.objectIndexCount = mesh.indices.length;
+    this.objectIndexFormat = mesh.indexFormat;
+  }
+
+  public resetObjectMesh(): void {
+    this.setObjectMesh(createDefaultCubeMesh());
+  }
+
   public render(): void {
     if (
       !this.device ||
@@ -109,9 +133,11 @@ export class Renderer {
       !this.skyPipeline ||
       !this.shadowPipeline ||
       !this.pipeline ||
-      !this.vertexBuffer ||
-      !this.indexBuffer ||
-      !this.cubeBindGroup ||
+      !this.objectVertexBuffer ||
+      !this.objectIndexBuffer ||
+      !this.floorVertexBuffer ||
+      !this.floorIndexBuffer ||
+      !this.objectBindGroup ||
       !this.floorBindGroup ||
       !this.depthTextureView
     ) {
@@ -141,16 +167,18 @@ export class Renderer {
     renderPass.setPipeline(this.skyPipeline);
     renderPass.draw(3);
     renderPass.setPipeline(this.pipeline);
-    renderPass.setVertexBuffer(0, this.vertexBuffer);
-    renderPass.setIndexBuffer(this.indexBuffer, "uint16");
+    renderPass.setVertexBuffer(0, this.floorVertexBuffer);
+    renderPass.setIndexBuffer(this.floorIndexBuffer, this.floorIndexFormat);
     renderPass.setBindGroup(0, this.floorBindGroup);
-    renderPass.drawIndexed(FLOOR_INDEX_COUNT, 1, CUBE_INDEX_COUNT);
+    renderPass.drawIndexed(this.floorIndexCount);
     renderPass.setPipeline(this.shadowPipeline);
-    renderPass.setBindGroup(0, this.cubeBindGroup);
-    renderPass.drawIndexed(CUBE_INDEX_COUNT);
+    renderPass.setVertexBuffer(0, this.objectVertexBuffer);
+    renderPass.setIndexBuffer(this.objectIndexBuffer, this.objectIndexFormat);
+    renderPass.setBindGroup(0, this.objectBindGroup);
+    renderPass.drawIndexed(this.objectIndexCount);
     renderPass.setPipeline(this.pipeline);
-    renderPass.setBindGroup(0, this.cubeBindGroup);
-    renderPass.drawIndexed(CUBE_INDEX_COUNT);
+    renderPass.setBindGroup(0, this.objectBindGroup);
+    renderPass.drawIndexed(this.objectIndexCount);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
   }
@@ -174,66 +202,7 @@ export class Renderer {
       return;
     }
 
-    const vertices = new Float32Array([
-      -0.5, -0.5,  0.5, 0.14, 0.22, 0.46,  0.0,  0.0,  1.0,
-       0.5, -0.5,  0.5, 0.14, 0.22, 0.46,  0.0,  0.0,  1.0,
-       0.5,  0.5,  0.5, 0.14, 0.22, 0.46,  0.0,  0.0,  1.0,
-      -0.5,  0.5,  0.5, 0.14, 0.22, 0.46,  0.0,  0.0,  1.0,
-
-      -0.5, -0.5, -0.5, 0.94, 0.54, 0.23,  0.0,  0.0, -1.0,
-      -0.5,  0.5, -0.5, 0.94, 0.54, 0.23,  0.0,  0.0, -1.0,
-       0.5,  0.5, -0.5, 0.94, 0.54, 0.23,  0.0,  0.0, -1.0,
-       0.5, -0.5, -0.5, 0.94, 0.54, 0.23,  0.0,  0.0, -1.0,
-
-      -0.5, -0.5, -0.5, 0.18, 0.68, 0.90, -1.0,  0.0,  0.0,
-      -0.5, -0.5,  0.5, 0.18, 0.68, 0.90, -1.0,  0.0,  0.0,
-      -0.5,  0.5,  0.5, 0.18, 0.68, 0.90, -1.0,  0.0,  0.0,
-      -0.5,  0.5, -0.5, 0.18, 0.68, 0.90, -1.0,  0.0,  0.0,
-
-       0.5, -0.5,  0.5, 0.38, 0.84, 0.56,  1.0,  0.0,  0.0,
-       0.5, -0.5, -0.5, 0.38, 0.84, 0.56,  1.0,  0.0,  0.0,
-       0.5,  0.5, -0.5, 0.38, 0.84, 0.56,  1.0,  0.0,  0.0,
-       0.5,  0.5,  0.5, 0.38, 0.84, 0.56,  1.0,  0.0,  0.0,
-
-      -0.5,  0.5,  0.5, 0.84, 0.28, 0.42,  0.0,  1.0,  0.0,
-       0.5,  0.5,  0.5, 0.84, 0.28, 0.42,  0.0,  1.0,  0.0,
-       0.5,  0.5, -0.5, 0.84, 0.28, 0.42,  0.0,  1.0,  0.0,
-      -0.5,  0.5, -0.5, 0.84, 0.28, 0.42,  0.0,  1.0,  0.0,
-
-      -0.5, -0.5, -0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
-       0.5, -0.5, -0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
-       0.5, -0.5,  0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
-      -0.5, -0.5,  0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
-
-      -4.0, -1.05, -4.5, 0.82, 0.77, 0.71,  0.0,  1.0,  0.0,
-       4.0, -1.05, -4.5, 0.82, 0.77, 0.71,  0.0,  1.0,  0.0,
-       4.0, -1.05,  4.5, 0.82, 0.77, 0.71,  0.0,  1.0,  0.0,
-      -4.0, -1.05,  4.5, 0.82, 0.77, 0.71,  0.0,  1.0,  0.0,
-    ]);
-
-    this.vertexBuffer = this.device.createBuffer({
-      size: vertices.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    });
-    this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices);
-
-    const indices = new Uint16Array([
-       0,  1,  2,  0,  2,  3,
-       4,  5,  6,  4,  6,  7,
-       8,  9, 10,  8, 10, 11,
-      12, 13, 14, 12, 14, 15,
-      16, 17, 18, 16, 18, 19,
-      20, 21, 22, 20, 22, 23,
-      24, 25, 26, 24, 26, 27,
-    ]);
-
-    this.indexBuffer = this.device.createBuffer({
-      size: indices.byteLength,
-      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-    });
-    this.device.queue.writeBuffer(this.indexBuffer, 0, indices);
-
-    this.cubeUniformBuffer = this.device.createBuffer({
+    this.objectUniformBuffer = this.device.createBuffer({
       size: SCENE_UNIFORM_BUFFER_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
@@ -295,7 +264,7 @@ export class Renderer {
         entryPoint: "vs_main",
         buffers: [
           {
-            arrayStride: CUBE_VERTEX_STRIDE,
+            arrayStride: MESH_VERTEX_STRIDE,
             attributes: [
               {
                 shaderLocation: 0,
@@ -342,7 +311,7 @@ export class Renderer {
         entryPoint: "shadow_vs_main",
         buffers: [
           {
-            arrayStride: CUBE_VERTEX_STRIDE,
+            arrayStride: MESH_VERTEX_STRIDE,
             attributes: [
               {
                 shaderLocation: 0,
@@ -395,13 +364,13 @@ export class Renderer {
       },
     });
 
-    this.cubeBindGroup = this.device.createBindGroup({
+    this.objectBindGroup = this.device.createBindGroup({
       layout: sceneBindGroupLayout,
       entries: [
         {
           binding: 0,
           resource: {
-            buffer: this.cubeUniformBuffer,
+            buffer: this.objectUniformBuffer,
           },
         },
       ],
@@ -418,10 +387,13 @@ export class Renderer {
         },
       ],
     });
+
+    this.setObjectMesh(createDefaultCubeMesh());
+    this.setFloorMesh(createFloorMesh());
   }
 
   private updateSceneUniforms(): void {
-    if (!this.device || !this.cubeUniformBuffer || !this.floorUniformBuffer) {
+    if (!this.device || !this.objectUniformBuffer || !this.floorUniformBuffer) {
       return;
     }
 
@@ -433,17 +405,17 @@ export class Renderer {
     );
     const sceneModelMatrix = createIdentityMatrix();
     const cameraPosition = buildCameraPosition(this.rotationX, this.rotationY);
-    const cubeUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
+    const objectUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
     const floorUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
 
-    cubeUniforms.set(sceneViewProjection, 0);
-    cubeUniforms.set(sceneModelMatrix, MATRIX_FLOAT_COUNT);
-    cubeUniforms.set(cameraPosition, MATRIX_FLOAT_COUNT * 2);
-    cubeUniforms.set(
+    objectUniforms.set(sceneViewProjection, 0);
+    objectUniforms.set(sceneModelMatrix, MATRIX_FLOAT_COUNT);
+    objectUniforms.set(cameraPosition, MATRIX_FLOAT_COUNT * 2);
+    objectUniforms.set(
       [this.material.color.r, this.material.color.g, this.material.color.b, 1],
       MATRIX_FLOAT_COUNT * 2 + 4,
     );
-    cubeUniforms.set(
+    objectUniforms.set(
       [this.material.surface, this.material.gloss, this.material.bleed, 0],
       MATRIX_FLOAT_COUNT * 2 + 8,
     );
@@ -454,8 +426,37 @@ export class Renderer {
     floorUniforms.set([0, 0, 0, 0], MATRIX_FLOAT_COUNT * 2 + 4);
     floorUniforms.set([1, 0.08, 1, 0], MATRIX_FLOAT_COUNT * 2 + 8);
 
-    this.device.queue.writeBuffer(this.cubeUniformBuffer, 0, cubeUniforms);
+    this.device.queue.writeBuffer(this.objectUniformBuffer, 0, objectUniforms);
     this.device.queue.writeBuffer(this.floorUniformBuffer, 0, floorUniforms);
+  }
+
+  private setFloorMesh(mesh: MeshData): void {
+    if (!this.device) {
+      return;
+    }
+
+    this.floorVertexBuffer = this.createVertexBuffer(mesh.vertices);
+    this.floorIndexBuffer = this.createIndexBuffer(mesh.indices);
+    this.floorIndexCount = mesh.indices.length;
+    this.floorIndexFormat = mesh.indexFormat;
+  }
+
+  private createVertexBuffer(vertices: Float32Array): GPUBuffer {
+    const buffer = this.device!.createBuffer({
+      size: vertices.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device!.queue.writeBuffer(buffer, 0, vertices);
+    return buffer;
+  }
+
+  private createIndexBuffer(indices: Uint16Array | Uint32Array): GPUBuffer {
+    const buffer = this.device!.createBuffer({
+      size: indices.byteLength,
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device!.queue.writeBuffer(buffer, 0, indices);
+    return buffer;
   }
 
   private createDepthTexture(): void {

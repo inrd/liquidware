@@ -1,4 +1,5 @@
 import { attachControls } from "../input/controls";
+import { parseObjMesh } from "../renderer/mesh";
 import { applyRetroGrade } from "../renderer/postprocess";
 import { Renderer } from "../renderer/renderer";
 
@@ -11,6 +12,13 @@ type MaterialControlElements = {
   glossValue: HTMLSpanElement;
   bleedInput: HTMLInputElement;
   bleedValue: HTMLSpanElement;
+  panel: HTMLDivElement;
+};
+type MeshControlElements = {
+  uploadButton: HTMLButtonElement;
+  resetButton: HTMLButtonElement;
+  fileInput: HTMLInputElement;
+  name: HTMLSpanElement;
   panel: HTMLDivElement;
 };
 
@@ -212,6 +220,49 @@ export async function bootstrap(): Promise<void> {
       toolbar.material.bleedValue.textContent = bleed.toFixed(2);
       renderer.setMaterial({ bleed });
     });
+    toolbar.mesh.uploadButton.addEventListener("click", () => {
+      if (isRendering) {
+        return;
+      }
+
+      toolbar.mesh.fileInput.click();
+    });
+    toolbar.mesh.resetButton.addEventListener("click", async () => {
+      if (isRendering) {
+        return;
+      }
+
+      renderer.resetObjectMesh();
+      toolbar.mesh.fileInput.value = "";
+      toolbar.mesh.name.textContent = "cube";
+      flashButtonLabel(toolbar.mesh.resetButton, "cube");
+
+      if (mode === "render") {
+        await updateRenderPreview();
+      }
+    });
+    toolbar.mesh.fileInput.addEventListener("change", async () => {
+      const file = toolbar.mesh.fileInput.files?.[0];
+
+      if (!file || isRendering) {
+        return;
+      }
+
+      try {
+        const mesh = parseObjMesh(await file.text());
+        renderer.setObjectMesh(mesh);
+        toolbar.mesh.name.textContent = clampLabel(file.name, 22);
+        flashButtonLabel(toolbar.mesh.uploadButton, "loaded");
+
+        if (mode === "render") {
+          await updateRenderPreview();
+        }
+      } catch (error) {
+        console.error(error);
+        toolbar.mesh.fileInput.value = "";
+        flashButtonLabel(toolbar.mesh.uploadButton, "invalid");
+      }
+    });
 
     function syncModeUi(): void {
       const isEditMode = mode === "edit";
@@ -268,6 +319,7 @@ function createToolbar(): {
   rotateLeftButton: HTMLButtonElement;
   rotateRightButton: HTMLButtonElement;
   material: MaterialControlElements;
+  mesh: MeshControlElements;
   setMode: (mode: ViewMode, isRendering: boolean) => void;
 } {
   const toolbar = document.createElement("div");
@@ -282,6 +334,13 @@ function createToolbar(): {
   const rotateLeftButton = document.createElement("button");
   const rotateDownButton = document.createElement("button");
   const rotateRightButton = document.createElement("button");
+  const meshPanel = document.createElement("div");
+  const meshLabel = document.createElement("label");
+  const meshControls = document.createElement("div");
+  const uploadMeshButton = document.createElement("button");
+  const resetMeshButton = document.createElement("button");
+  const meshName = document.createElement("span");
+  const meshFileInput = document.createElement("input");
   const materialPanel = document.createElement("div");
   const colorLabel = document.createElement("label");
   const colorInput = document.createElement("input");
@@ -371,6 +430,17 @@ function createToolbar(): {
     alignItems: "center",
   });
 
+  Object.assign(meshPanel.style, {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: "8px",
+    padding: "10px 12px",
+    border: "1px solid rgba(187, 204, 240, 0.18)",
+    borderRadius: "14px",
+    background: "linear-gradient(180deg, rgba(14, 19, 39, 0.42), rgba(10, 14, 28, 0.26))",
+    minWidth: "198px",
+  });
+
   rotateUpButton.style.gridColumn = "2";
   rotateUpButton.style.gridRow = "1";
   rotateLeftButton.style.gridColumn = "1";
@@ -392,14 +462,44 @@ function createToolbar(): {
     minWidth: "212px",
   });
 
+  configureMaterialLabel(meshLabel, "mesh");
   configureMaterialLabel(colorLabel, "color");
   configureMaterialLabel(surfaceLabel, "surface");
   configureMaterialLabel(glossLabel, "gloss");
   configureMaterialLabel(bleedLabel, "bleed");
 
+  configureButton(uploadMeshButton, "load .obj", "idle");
+  configureButton(resetMeshButton, "cube", "idle");
+  uploadMeshButton.style.minWidth = "0";
+  uploadMeshButton.style.padding = "0 14px";
+  resetMeshButton.style.minWidth = "0";
+  resetMeshButton.style.padding = "0 14px";
+
+  Object.assign(meshControls.style, {
+    display: "grid",
+    gridTemplateColumns: "1fr auto",
+    gap: "8px",
+    alignItems: "center",
+  });
+
+  meshFileInput.type = "file";
+  meshFileInput.accept = ".obj,model/obj,text/plain";
+  meshFileInput.hidden = true;
+
+  meshName.textContent = "cube";
+  Object.assign(meshName.style, {
+    minHeight: "18px",
+    color: "rgba(230, 238, 255, 0.82)",
+    fontFamily: "monospace",
+    fontSize: "12px",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  });
+
   colorInput.type = "color";
   colorInput.value = "#38c2dc";
-  colorInput.setAttribute("aria-label", "Cube material color");
+  colorInput.setAttribute("aria-label", "Object material color");
   Object.assign(colorInput.style, {
     width: "40px",
     height: "28px",
@@ -410,11 +510,11 @@ function createToolbar(): {
     cursor: "pointer",
   });
 
-  configureMaterialRange(surfaceInput, "Cube material surface");
+  configureMaterialRange(surfaceInput, "Object material surface");
   surfaceInput.value = "0.38";
-  configureMaterialRange(glossInput, "Cube material gloss");
+  configureMaterialRange(glossInput, "Object material gloss");
   glossInput.value = "0.62";
-  configureMaterialRange(bleedInput, "Cube material light bleed");
+  configureMaterialRange(bleedInput, "Object material light bleed");
   bleedInput.value = "0.22";
 
   configureMaterialValue(surfaceValue, surfaceInput.value);
@@ -423,6 +523,8 @@ function createToolbar(): {
 
   actionCluster.append(downloadButton, copyButton);
   rotateCluster.append(rotateUpButton, rotateLeftButton, rotateDownButton, rotateRightButton);
+  meshControls.append(uploadMeshButton, resetMeshButton);
+  meshPanel.append(meshLabel, meshControls, meshName, meshFileInput);
   materialPanel.append(
     colorLabel,
     colorInput,
@@ -474,7 +576,16 @@ function createToolbar(): {
   handle.addEventListener("pointerup", endDrag);
   handle.addEventListener("pointercancel", endDrag);
 
-  toolbar.append(loadingBorder, handle, editButton, renderButton, actionCluster, rotateCluster, materialPanel);
+  toolbar.append(
+    loadingBorder,
+    handle,
+    editButton,
+    renderButton,
+    actionCluster,
+    rotateCluster,
+    meshPanel,
+    materialPanel,
+  );
 
   return {
     element: toolbar,
@@ -486,6 +597,13 @@ function createToolbar(): {
     rotateDownButton,
     rotateLeftButton,
     rotateRightButton,
+    mesh: {
+      uploadButton: uploadMeshButton,
+      resetButton: resetMeshButton,
+      fileInput: meshFileInput,
+      name: meshName,
+      panel: meshPanel,
+    },
     material: {
       colorInput,
       surfaceInput,
@@ -500,6 +618,8 @@ function createToolbar(): {
       const disableRotation = isRendering || mode !== "edit";
       const disableRenderActions = isRendering || mode !== "render";
       const disableMaterial = isRendering;
+      const disableMesh = isRendering;
+      const showEditControls = mode === "edit";
 
       setButtonState(editButton, mode === "edit" ? "active" : "idle");
       setButtonState(renderButton, mode === "render" ? "active" : "idle");
@@ -509,7 +629,9 @@ function createToolbar(): {
       editButton.style.cursor = isRendering ? "wait" : "pointer";
       renderButton.style.cursor = isRendering ? "wait" : "pointer";
       actionCluster.style.display = mode === "render" ? "flex" : "none";
-      rotateCluster.style.display = mode === "edit" ? "grid" : "none";
+      rotateCluster.style.display = showEditControls ? "grid" : "none";
+      meshPanel.style.display = showEditControls ? "grid" : "none";
+      materialPanel.style.display = showEditControls ? "grid" : "none";
 
       for (const button of [downloadButton, copyButton]) {
         button.disabled = disableRenderActions;
@@ -523,6 +645,12 @@ function createToolbar(): {
         button.style.opacity = disableRotation ? "0.42" : "0.92";
       }
 
+      for (const button of [uploadMeshButton, resetMeshButton]) {
+        button.disabled = disableMesh;
+        button.style.cursor = disableMesh ? (isRendering ? "wait" : "default") : "pointer";
+        button.style.opacity = disableMesh ? "0.42" : "0.92";
+      }
+
       for (const input of [colorInput, surfaceInput, glossInput, bleedInput]) {
         input.disabled = disableMaterial;
         input.style.cursor = disableMaterial ? (isRendering ? "wait" : "default") : "pointer";
@@ -530,6 +658,7 @@ function createToolbar(): {
       }
 
       materialPanel.style.opacity = disableMaterial ? "0.56" : "1";
+      meshPanel.style.opacity = disableMesh ? "0.56" : "1";
     },
   };
 }
@@ -719,6 +848,10 @@ function flashButtonLabel(button: HTMLButtonElement, label: string): void {
   window.setTimeout(() => {
     button.textContent = originalLabel;
   }, 1200);
+}
+
+function clampLabel(text: string, maxLength: number): string {
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
 }
 
 const toolbarAnimationStyles = document.createElement("style");
