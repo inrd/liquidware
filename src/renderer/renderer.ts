@@ -4,12 +4,14 @@ import {
   INITIAL_ROTATION_Y,
   MATRIX_FLOAT_COUNT,
   applyRotation,
+  buildModelMatrix,
   buildModelViewProjectionMatrix,
 } from "./math";
 
-const CUBE_VERTEX_STRIDE = 6 * Float32Array.BYTES_PER_ELEMENT;
+const CUBE_VERTEX_STRIDE = 9 * Float32Array.BYTES_PER_ELEMENT;
 const CUBE_INDEX_COUNT = 36;
-const MATRIX_BUFFER_SIZE = MATRIX_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
+const SCENE_UNIFORM_FLOAT_COUNT = MATRIX_FLOAT_COUNT * 2;
+const SCENE_UNIFORM_BUFFER_SIZE = SCENE_UNIFORM_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
 const DEPTH_FORMAT = "depth24plus";
 
 export class Renderer {
@@ -131,35 +133,35 @@ export class Renderer {
     }
 
     const vertices = new Float32Array([
-      -0.5, -0.5,  0.5, 0.14, 0.22, 0.46,
-       0.5, -0.5,  0.5, 0.14, 0.22, 0.46,
-       0.5,  0.5,  0.5, 0.14, 0.22, 0.46,
-      -0.5,  0.5,  0.5, 0.14, 0.22, 0.46,
+      -0.5, -0.5,  0.5, 0.14, 0.22, 0.46,  0.0,  0.0,  1.0,
+       0.5, -0.5,  0.5, 0.14, 0.22, 0.46,  0.0,  0.0,  1.0,
+       0.5,  0.5,  0.5, 0.14, 0.22, 0.46,  0.0,  0.0,  1.0,
+      -0.5,  0.5,  0.5, 0.14, 0.22, 0.46,  0.0,  0.0,  1.0,
 
-      -0.5, -0.5, -0.5, 0.94, 0.54, 0.23,
-      -0.5,  0.5, -0.5, 0.94, 0.54, 0.23,
-       0.5,  0.5, -0.5, 0.94, 0.54, 0.23,
-       0.5, -0.5, -0.5, 0.94, 0.54, 0.23,
+      -0.5, -0.5, -0.5, 0.94, 0.54, 0.23,  0.0,  0.0, -1.0,
+      -0.5,  0.5, -0.5, 0.94, 0.54, 0.23,  0.0,  0.0, -1.0,
+       0.5,  0.5, -0.5, 0.94, 0.54, 0.23,  0.0,  0.0, -1.0,
+       0.5, -0.5, -0.5, 0.94, 0.54, 0.23,  0.0,  0.0, -1.0,
 
-      -0.5, -0.5, -0.5, 0.18, 0.68, 0.90,
-      -0.5, -0.5,  0.5, 0.18, 0.68, 0.90,
-      -0.5,  0.5,  0.5, 0.18, 0.68, 0.90,
-      -0.5,  0.5, -0.5, 0.18, 0.68, 0.90,
+      -0.5, -0.5, -0.5, 0.18, 0.68, 0.90, -1.0,  0.0,  0.0,
+      -0.5, -0.5,  0.5, 0.18, 0.68, 0.90, -1.0,  0.0,  0.0,
+      -0.5,  0.5,  0.5, 0.18, 0.68, 0.90, -1.0,  0.0,  0.0,
+      -0.5,  0.5, -0.5, 0.18, 0.68, 0.90, -1.0,  0.0,  0.0,
 
-       0.5, -0.5,  0.5, 0.38, 0.84, 0.56,
-       0.5, -0.5, -0.5, 0.38, 0.84, 0.56,
-       0.5,  0.5, -0.5, 0.38, 0.84, 0.56,
-       0.5,  0.5,  0.5, 0.38, 0.84, 0.56,
+       0.5, -0.5,  0.5, 0.38, 0.84, 0.56,  1.0,  0.0,  0.0,
+       0.5, -0.5, -0.5, 0.38, 0.84, 0.56,  1.0,  0.0,  0.0,
+       0.5,  0.5, -0.5, 0.38, 0.84, 0.56,  1.0,  0.0,  0.0,
+       0.5,  0.5,  0.5, 0.38, 0.84, 0.56,  1.0,  0.0,  0.0,
 
-      -0.5,  0.5,  0.5, 0.84, 0.28, 0.42,
-       0.5,  0.5,  0.5, 0.84, 0.28, 0.42,
-       0.5,  0.5, -0.5, 0.84, 0.28, 0.42,
-      -0.5,  0.5, -0.5, 0.84, 0.28, 0.42,
+      -0.5,  0.5,  0.5, 0.84, 0.28, 0.42,  0.0,  1.0,  0.0,
+       0.5,  0.5,  0.5, 0.84, 0.28, 0.42,  0.0,  1.0,  0.0,
+       0.5,  0.5, -0.5, 0.84, 0.28, 0.42,  0.0,  1.0,  0.0,
+      -0.5,  0.5, -0.5, 0.84, 0.28, 0.42,  0.0,  1.0,  0.0,
 
-      -0.5, -0.5, -0.5, 0.95, 0.84, 0.32,
-       0.5, -0.5, -0.5, 0.95, 0.84, 0.32,
-       0.5, -0.5,  0.5, 0.95, 0.84, 0.32,
-      -0.5, -0.5,  0.5, 0.95, 0.84, 0.32,
+      -0.5, -0.5, -0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
+       0.5, -0.5, -0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
+       0.5, -0.5,  0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
+      -0.5, -0.5,  0.5, 0.95, 0.84, 0.32,  0.0, -1.0,  0.0,
     ]);
 
     this.vertexBuffer = this.device.createBuffer({
@@ -184,7 +186,7 @@ export class Renderer {
     this.device.queue.writeBuffer(this.indexBuffer, 0, indices);
 
     this.uniformBuffer = this.device.createBuffer({
-      size: MATRIX_BUFFER_SIZE,
+      size: SCENE_UNIFORM_BUFFER_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -209,6 +211,11 @@ export class Renderer {
               {
                 shaderLocation: 1,
                 offset: 3 * Float32Array.BYTES_PER_ELEMENT,
+                format: "float32x3",
+              },
+              {
+                shaderLocation: 2,
+                offset: 6 * Float32Array.BYTES_PER_ELEMENT,
                 format: "float32x3",
               },
             ],
@@ -258,8 +265,13 @@ export class Renderer {
       this.rotationX,
       this.rotationY,
     );
+    const modelMatrix = buildModelMatrix(this.rotationX, this.rotationY);
+    const sceneUniforms = new Float32Array(SCENE_UNIFORM_FLOAT_COUNT);
 
-    this.device.queue.writeBuffer(this.uniformBuffer, 0, modelViewProjection);
+    sceneUniforms.set(modelViewProjection, 0);
+    sceneUniforms.set(modelMatrix, MATRIX_FLOAT_COUNT);
+
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, sceneUniforms);
   }
 
   private createDepthTexture(): void {
