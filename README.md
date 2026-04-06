@@ -31,5 +31,6 @@ npm test
 - Use `load .obj` to replace the default cube with a local OBJ mesh, or `cube` to switch back.
 - Imported OBJ files are auto-centered, auto-scaled, and currently support polygon faces with `v`, optional `vn`, and `f` records.
 - Use the toolbar material controls to set the active mesh's single base color plus surface character, stylized gloss, and retro light bleed.
+- Use the `ground` panel to control the checkerboard floor: tile scale and the light/dark tile colors.
 - `edit` shows the live WebGPU canvas and keeps rotation controls enabled.
 - `render` captures a rasterized still of the current scene, applies some post-processing treatments, and provides `download` and `copy` options.
