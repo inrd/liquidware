@@ -114,12 +114,12 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4f {
   let fogFar = 8.8;
   let fogStrength = 0.58;
   let isFloor = abs(input.worldPosition.y - floorY) < 0.02 && normal.y > 0.95;
-  let tileScale = 1.2;
+  let tileScale = scene.materialColor.a;
   let tileCoordinates = floor((input.worldPosition.xz + vec2f(12.0, 12.0)) * tileScale);
   let tileIndex = i32(tileCoordinates.x + tileCoordinates.y);
   let tileMask = f32(tileIndex & 1);
-  let floorBaseA = vec3f(0.87, 0.84, 0.8);
-  let floorBaseB = vec3f(0.16, 0.13, 0.12);
+  let floorBaseA = scene.materialColor.rgb;
+  let floorBaseB = scene.materialProps.rgb;
   let floorTint = mix(floorBaseA, floorBaseB, tileMask);
   let materialColor = scene.materialColor.xyz;
   let baseColor = select(materialColor, floorTint, isFloor);

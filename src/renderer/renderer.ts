@@ -28,11 +28,23 @@ type MaterialSettings = {
   bleed: number;
 };
 
+type FloorSettings = {
+  tileScale: number;
+  colorA: { r: number; g: number; b: number };
+  colorB: { r: number; g: number; b: number };
+};
+
 const DEFAULT_MATERIAL: MaterialSettings = {
   color: { r: 0.22, g: 0.76, b: 0.88 },
   surface: 0.38,
   gloss: 0.62,
   bleed: 0.22,
+};
+
+const DEFAULT_FLOOR: FloorSettings = {
+  tileScale: 1.2,
+  colorA: { r: 0.87, g: 0.84, b: 0.80 },
+  colorB: { r: 0.16, g: 0.13, b: 0.12 },
 };
 const DEFAULT_OBJECT_TRANSFORM: ObjectTransform = {
   offsetX: 0,
@@ -67,6 +79,7 @@ export class Renderer {
   private rotationX = INITIAL_ROTATION_X;
   private rotationY = INITIAL_ROTATION_Y;
   private material: MaterialSettings = DEFAULT_MATERIAL;
+  private floor: FloorSettings = DEFAULT_FLOOR;
   private objectTransform: ObjectTransform = DEFAULT_OBJECT_TRANSFORM;
 
   public constructor(canvas: HTMLCanvasElement) {
@@ -133,6 +146,15 @@ export class Renderer {
 
   public resetObjectMesh(): void {
     this.setObjectMesh(createDefaultCubeMesh());
+  }
+
+  public setFloor(nextFloor: Partial<FloorSettings>): void {
+    this.floor = {
+      ...this.floor,
+      ...nextFloor,
+      colorA: { ...this.floor.colorA, ...nextFloor.colorA },
+      colorB: { ...this.floor.colorB, ...nextFloor.colorB },
+    };
   }
 
   public setObjectTransform(nextTransform: Partial<ObjectTransform>): void {
@@ -439,8 +461,14 @@ export class Renderer {
     floorUniforms.set(sceneViewProjection, 0);
     floorUniforms.set(createIdentityMatrix(), MATRIX_FLOAT_COUNT);
     floorUniforms.set(cameraPosition, MATRIX_FLOAT_COUNT * 2);
-    floorUniforms.set([0, 0, 0, 0], MATRIX_FLOAT_COUNT * 2 + 4);
-    floorUniforms.set([1, 0.08, 1, 0], MATRIX_FLOAT_COUNT * 2 + 8);
+    floorUniforms.set(
+      [this.floor.colorA.r, this.floor.colorA.g, this.floor.colorA.b, this.floor.tileScale],
+      MATRIX_FLOAT_COUNT * 2 + 4,
+    );
+    floorUniforms.set(
+      [this.floor.colorB.r, this.floor.colorB.g, this.floor.colorB.b, 0],
+      MATRIX_FLOAT_COUNT * 2 + 8,
+    );
 
     this.device.queue.writeBuffer(this.objectUniformBuffer, 0, objectUniforms);
     this.device.queue.writeBuffer(this.floorUniformBuffer, 0, floorUniforms);

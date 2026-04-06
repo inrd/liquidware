@@ -32,6 +32,13 @@ type MeshControlElements = {
   name: HTMLSpanElement;
   panel: HTMLDivElement;
 };
+type GroundControlElements = {
+  tileScaleInput: HTMLInputElement;
+  tileScaleValue: HTMLSpanElement;
+  colorAInput: HTMLInputElement;
+  colorBInput: HTMLInputElement;
+  panel: HTMLDivElement;
+};
 
 export async function bootstrap(): Promise<void> {
   const canvas = document.createElement("canvas");
@@ -231,6 +238,17 @@ export async function bootstrap(): Promise<void> {
       toolbar.material.bleedValue.textContent = bleed.toFixed(2);
       renderer.setMaterial({ bleed });
     });
+    toolbar.ground.tileScaleInput.addEventListener("input", () => {
+      const tileScale = Number(toolbar.ground.tileScaleInput.value);
+      toolbar.ground.tileScaleValue.textContent = tileScale.toFixed(2);
+      renderer.setFloor({ tileScale });
+    });
+    toolbar.ground.colorAInput.addEventListener("input", () => {
+      renderer.setFloor({ colorA: hexToRgb(toolbar.ground.colorAInput.value) });
+    });
+    toolbar.ground.colorBInput.addEventListener("input", () => {
+      renderer.setFloor({ colorB: hexToRgb(toolbar.ground.colorBInput.value) });
+    });
     toolbar.transform.scaleInput.addEventListener("input", () => {
       const scale = Number(toolbar.transform.scaleInput.value);
       toolbar.transform.scaleValue.textContent = scale.toFixed(2);
@@ -352,6 +370,7 @@ function createToolbar(): {
   transform: TransformControlElements;
   material: MaterialControlElements;
   mesh: MeshControlElements;
+  ground: GroundControlElements;
   setMode: (mode: ViewMode, isRendering: boolean) => void;
 } {
   const toolbar = document.createElement("div");
@@ -381,7 +400,6 @@ function createToolbar(): {
   const offsetZInput = document.createElement("input");
   const offsetZValue = document.createElement("span");
   const meshPanel = document.createElement("div");
-  const meshLabel = document.createElement("label");
   const meshControls = document.createElement("div");
   const uploadMeshButton = document.createElement("button");
   const resetMeshButton = document.createElement("button");
@@ -400,11 +418,30 @@ function createToolbar(): {
   const bleedInput = document.createElement("input");
   const bleedValue = document.createElement("span");
   const loadingBorder = document.createElement("div");
+  const rotateSection = document.createElement("div");
+  const rotateSectionHeader = document.createElement("button");
+  const transformSection = document.createElement("div");
+  const transformSectionHeader = document.createElement("button");
+  const meshSection = document.createElement("div");
+  const meshSectionHeader = document.createElement("button");
+  const materialSection = document.createElement("div");
+  const materialSectionHeader = document.createElement("button");
+  const groundPanel = document.createElement("div");
+  const tileScaleLabel = document.createElement("label");
+  const tileScaleInput = document.createElement("input");
+  const tileScaleValue = document.createElement("span");
+  const colorALabel = document.createElement("label");
+  const colorAInput = document.createElement("input");
+  const colorBLabel = document.createElement("label");
+  const colorBInput = document.createElement("input");
+  const groundSection = document.createElement("div");
+  const groundSectionHeader = document.createElement("button");
 
   let pointerId: number | null = null;
   let dragOffsetX = 0;
   let dragOffsetY = 0;
   let isCollapsed = false;
+  let activeSection: "rotate" | "transform" | "mesh" | "material" | "ground" | null = "rotate";
 
   toolbar.setAttribute("aria-label", "Floating toolbar");
 
@@ -530,11 +567,79 @@ function createToolbar(): {
     minWidth: "212px",
   });
 
+  const sectionWrapperStyle = {
+    display: "none",
+    flexDirection: "column" as const,
+    gap: "4px",
+    alignItems: "stretch",
+  };
+  Object.assign(rotateSection.style, sectionWrapperStyle);
+  Object.assign(transformSection.style, sectionWrapperStyle);
+  Object.assign(meshSection.style, sectionWrapperStyle);
+  Object.assign(materialSection.style, sectionWrapperStyle);
+  Object.assign(groundSection.style, sectionWrapperStyle);
+
+  configureSectionHeader(rotateSectionHeader, "rotate");
+  configureSectionHeader(transformSectionHeader, "transform");
+  configureSectionHeader(meshSectionHeader, "mesh");
+  configureSectionHeader(materialSectionHeader, "material");
+  configureSectionHeader(groundSectionHeader, "ground");
+
+  Object.assign(groundPanel.style, {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, auto))",
+    gap: "8px 12px",
+    padding: "10px 12px",
+    border: "1px solid rgba(187, 204, 240, 0.18)",
+    borderRadius: "14px",
+    background: "linear-gradient(180deg, rgba(14, 19, 39, 0.42), rgba(10, 14, 28, 0.26))",
+    alignItems: "center",
+    minWidth: "212px",
+  });
+
+  configureMaterialLabel(tileScaleLabel, "tiles");
+  configureMaterialLabel(colorALabel, "light");
+  configureMaterialLabel(colorBLabel, "dark");
+
+  configureMaterialRange(tileScaleInput, "Tile scale");
+  tileScaleInput.min = "0.3";
+  tileScaleInput.max = "3.0";
+  tileScaleInput.step = "0.01";
+  tileScaleInput.value = "1.20";
+
+  configureMaterialValue(tileScaleValue, tileScaleInput.value);
+
+  for (const [input, defaultHex, ariaLabel] of [
+    [colorAInput, "#ded6cc", "Light tile color"],
+    [colorBInput, "#29211f", "Dark tile color"],
+  ] as const) {
+    input.type = "color";
+    input.value = defaultHex;
+    input.setAttribute("aria-label", ariaLabel);
+    Object.assign(input.style, {
+      width: "40px",
+      height: "28px",
+      padding: "0",
+      border: "1px solid rgba(196, 214, 255, 0.28)",
+      borderRadius: "8px",
+      background: "transparent",
+      cursor: "pointer",
+    });
+  }
+
+  groundPanel.append(
+    tileScaleLabel,
+    wrapMaterialRange(tileScaleInput, tileScaleValue),
+    colorALabel,
+    colorAInput,
+    colorBLabel,
+    colorBInput,
+  );
+
   configureMaterialLabel(scaleLabel, "scale");
   configureMaterialLabel(offsetXLabel, "move x");
   configureMaterialLabel(offsetYLabel, "move y");
   configureMaterialLabel(offsetZLabel, "move z");
-  configureMaterialLabel(meshLabel, "mesh");
   configureMaterialLabel(colorLabel, "color");
   configureMaterialLabel(surfaceLabel, "surface");
   configureMaterialLabel(glossLabel, "gloss");
@@ -632,7 +737,7 @@ function createToolbar(): {
     wrapMaterialRange(offsetZInput, offsetZValue),
   );
   meshControls.append(uploadMeshButton, resetMeshButton);
-  meshPanel.append(meshLabel, meshControls, meshName, meshFileInput);
+  meshPanel.append(meshControls, meshName, meshFileInput);
   materialPanel.append(
     colorLabel,
     colorInput,
@@ -689,6 +794,25 @@ function createToolbar(): {
     updateToolbarVisibility(currentMode, currentIsRendering);
   });
 
+  for (const [header, key] of [
+    [rotateSectionHeader, "rotate"],
+    [transformSectionHeader, "transform"],
+    [meshSectionHeader, "mesh"],
+    [materialSectionHeader, "material"],
+    [groundSectionHeader, "ground"],
+  ] as const) {
+    header.addEventListener("click", () => {
+      activeSection = activeSection === key ? null : key;
+      updateToolbarVisibility(currentMode, currentIsRendering);
+    });
+  }
+
+  rotateSection.append(rotateSectionHeader, rotateCluster);
+  transformSection.append(transformSectionHeader, transformPanel);
+  meshSection.append(meshSectionHeader, meshPanel);
+  materialSection.append(materialSectionHeader, materialPanel);
+  groundSection.append(groundSectionHeader, groundPanel);
+
   toolbar.append(
     loadingBorder,
     handle,
@@ -696,10 +820,11 @@ function createToolbar(): {
     editButton,
     renderButton,
     actionCluster,
-    rotateCluster,
-    transformPanel,
-    meshPanel,
-    materialPanel,
+    rotateSection,
+    transformSection,
+    meshSection,
+    materialSection,
+    groundSection,
   );
 
   let currentMode: ViewMode = "edit";
@@ -729,10 +854,21 @@ function createToolbar(): {
     editButton.style.cursor = isRendering ? "wait" : "pointer";
     renderButton.style.cursor = isRendering ? "wait" : "pointer";
     actionCluster.style.display = showRenderActions ? "flex" : "none";
-    rotateCluster.style.display = showEditControls ? "grid" : "none";
-    transformPanel.style.display = showEditControls ? "grid" : "none";
-    meshPanel.style.display = showEditControls ? "grid" : "none";
-    materialPanel.style.display = showEditControls ? "grid" : "none";
+    rotateSection.style.display = showEditControls ? "flex" : "none";
+    transformSection.style.display = showEditControls ? "flex" : "none";
+    meshSection.style.display = showEditControls ? "flex" : "none";
+    materialSection.style.display = showEditControls ? "flex" : "none";
+    groundSection.style.display = showEditControls ? "flex" : "none";
+    rotateCluster.style.display = showEditControls && activeSection === "rotate" ? "grid" : "none";
+    transformPanel.style.display = showEditControls && activeSection === "transform" ? "grid" : "none";
+    meshPanel.style.display = showEditControls && activeSection === "mesh" ? "grid" : "none";
+    materialPanel.style.display = showEditControls && activeSection === "material" ? "grid" : "none";
+    groundPanel.style.display = showEditControls && activeSection === "ground" ? "grid" : "none";
+    updateSectionHeader(rotateSectionHeader, "rotate", activeSection === "rotate");
+    updateSectionHeader(transformSectionHeader, "transform", activeSection === "transform");
+    updateSectionHeader(meshSectionHeader, "mesh", activeSection === "mesh");
+    updateSectionHeader(materialSectionHeader, "material", activeSection === "material");
+    updateSectionHeader(groundSectionHeader, "ground", activeSection === "ground");
 
     for (const button of [downloadButton, copyButton]) {
       button.disabled = disableRenderActions;
@@ -764,9 +900,16 @@ function createToolbar(): {
       input.style.opacity = disableMaterial ? "0.42" : "0.96";
     }
 
+    for (const input of [tileScaleInput, colorAInput, colorBInput]) {
+      input.disabled = isRendering;
+      input.style.cursor = isRendering ? "wait" : "pointer";
+      input.style.opacity = isRendering ? "0.42" : "0.96";
+    }
+
     transformPanel.style.opacity = disableTransform ? "0.56" : "1";
     materialPanel.style.opacity = disableMaterial ? "0.56" : "1";
     meshPanel.style.opacity = disableMesh ? "0.56" : "1";
+    groundPanel.style.opacity = isRendering ? "0.56" : "1";
   }
 
   return {
@@ -806,6 +949,13 @@ function createToolbar(): {
       bleedInput,
       bleedValue,
       panel: materialPanel,
+    },
+    ground: {
+      tileScaleInput,
+      tileScaleValue,
+      colorAInput,
+      colorBInput,
+      panel: groundPanel,
     },
     setMode: updateToolbarVisibility,
   };
@@ -866,6 +1016,34 @@ function configureRotateButton(button: HTMLButtonElement, label: string, title: 
     opacity: "0.92",
     transition: "background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, opacity 140ms ease",
   });
+}
+
+function configureSectionHeader(button: HTMLButtonElement, label: string): void {
+  button.type = "button";
+  Object.assign(button.style, {
+    appearance: "none",
+    border: "none",
+    background: "transparent",
+    color: "rgba(222, 233, 255, 0.5)",
+    fontFamily: "\"IBM Plex Sans\", \"Avenir Next\", sans-serif",
+    fontSize: "11px",
+    fontWeight: "600",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    cursor: "pointer",
+    padding: "2px 4px",
+    borderRadius: "6px",
+    textAlign: "left",
+    transition: "color 120ms ease",
+  });
+  updateSectionHeader(button, label, false);
+}
+
+function updateSectionHeader(button: HTMLButtonElement, label: string, active: boolean): void {
+  button.textContent = `${active ? "▾" : "▸"} ${label}`;
+  button.setAttribute("aria-label", `${active ? "Collapse" : "Expand"} ${label} controls`);
+  button.title = active ? `Collapse ${label}` : `Expand ${label}`;
+  button.style.color = active ? "rgba(222, 233, 255, 0.72)" : "rgba(222, 233, 255, 0.44)";
 }
 
 function configureMaterialLabel(label: HTMLLabelElement, text: string): void {
